@@ -39,7 +39,12 @@ AI Foundry project.
 Furthermore, since chat completion clients are essentially stateless, the code also manually
 the messaging history and passes it within each request to the model.
 
-### Architecture Summary
+### Basic Chatbot Architecture
 <p align="center">
   <img src="Chatbot Architecture.png" alt="Description" width="500"/>
+</p>
+
+### Function App Chatbot Architecture
+<p align="center">
+  <img src="Function App Chatbot Architecture.png" alt="Description" width="500"/>
 </p>
