@@ -1,0 +1,5 @@
+dotenv
+
+azure-ai-inference
+azure-core
+azure-cosmos
