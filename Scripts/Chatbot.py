@@ -1,4 +1,5 @@
 from openai import AzureOpenAI
+import tiktoken
 
 import os
 from dotenv import load_dotenv
@@ -16,6 +17,8 @@ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 AZURE_AI_SERVICES_ENDPOINT = os.getenv("AZURE_AI_SERVICES_ENDPOINT")
 
+
+MAX_TOKENS = 2000
 TEST_USER_ID = os.getenv("TEST_USER_ID")
 DEFAULT_CHATBOT_PROMPT = "You are a helpful assistant. Start the conversation by greeting the user warmly and asking how you can help. " \
 "Inform the user that they can: access the menu by typing 'menu', restart the chat session by typing 'restart', and quit the chat by typing 'exit'." \
@@ -24,6 +27,41 @@ DEFAULT_CHATBOT_PROMPT = "You are a helpful assistant. Start the conversation by
 
 def clearTerminal():
     os.system('cls' if os.name == 'nt' else 'clear')
+
+def num_tokens_from_messages(messages):
+    encoding = tiktoken.encoding_for_model(AZURE_OPENAI_MODEL_NAME)
+    num_tokens = 0
+    for message in messages:
+        num_tokens += 4  # every message overhead
+        for key, value in message.items():
+            num_tokens += len(encoding.encode(value))
+    num_tokens += 2  # every reply overhead
+    return num_tokens
+
+def ensureTokenLimit(database, client, session_id, messages):
+    #This function checks if the token limit is almost reached
+    #If the limit is almost reached, it summarizes the conversation and creates a new messages list
+    #It returns the new/old messages list
+    print(f"\n/// Current token count: {num_tokens_from_messages(messages)}\n")
+    if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.85:
+        print("\n/// Token limit almost reached. Summarizing the conversation...\n")
+        summary_prompt = "Summarize the conversation so far in a concise manner, retaining important details and context. " \
+        "The summary should be brief and to the point, capturing the essence of the discussion without unnecessary elaboration. " \
+        "The summary will be used to maintain context in future interactions, so ensure it is clear and informative."
+
+        messages.append({
+            "role": "user",
+            "content": summary_prompt
+        })
+
+        messages = sendMessage(database, client, session_id, messages) 
+
+        #last 10 messages + summary will be kept in history. 
+        #The rest of the messages will be displayed but not stored within the context window
+        summary_messages = messages[-12:] 
+        return summary_messages
+    else:
+        return messages
 
 
 def sendMessage(database, client, session_id, messages):
@@ -34,7 +72,7 @@ def sendMessage(database, client, session_id, messages):
     response = client.chat.completions.create(
         stream=True,
         messages=messages,
-        max_tokens=4096,
+        max_tokens=MAX_TOKENS,
         temperature=1.0,
         top_p=1.0,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
@@ -110,7 +148,6 @@ def displayMenu(database, client, session_id, messages):
           2. Select Session
           3. Clear Current Session
           4. Delete Session
-          5. Summarize Current Session
           """)
     choice = input("Enter your choice (1-5): ")
 
@@ -165,20 +202,6 @@ def displayMenu(database, client, session_id, messages):
         database.deleteSession(d_session_id)
         print("Session deleted.\n")
         return displayMenu(database, client, session_id, messages)
-    
-    elif choice == "5": #Summarize Current Session
-
-        if(session_id is None or len(messages) <= 2):
-            print("There is nothing to summarize. Kindly enter a session or write some messages in the conversation first\n")
-            return displayMenu(database, client, session_id, messages)
-        
-        messages.append({
-            "role": "user",
-            "content": "Please briefly summarize our conversation so far. Reiterate the key points we discussed in a clear and consice manner."
-        })
-
-        messages = sendMessage(database, client, session_id, messages)
-
 
     else:
         print("Invalid choice. Please try again.")
@@ -221,6 +244,8 @@ def runChatbot(client, database):
                 })
                             
             messages = sendMessage(database, client, session_id, messages)
+
+            messages = ensureTokenLimit(database, client, session_id, messages)
 
     except Exception as e:
         print("Something went wrong.")

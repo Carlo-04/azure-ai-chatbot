@@ -1,4 +1,4 @@
 dotenv
-
+tiktoken
 openai
 azure-cosmos
