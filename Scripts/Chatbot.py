@@ -18,7 +18,7 @@ AZURE_AI_SERVICES_ENDPOINT = os.getenv("AZURE_AI_SERVICES_ENDPOINT")
 
 TEST_USER_ID = os.getenv("TEST_USER_ID")
 DEFAULT_CHATBOT_PROMPT = "You are a helpful assistant. Start the conversation by greeting the user warmly and asking how you can help. " \
-"Inform the user that they can access the menu at any time by typing 'menu'." \
+"Inform the user that they can: access the menu by typing 'menu', restart the chat session by typing 'restart', and quit the chat by typing 'exit'." \
 "If asked about the menu options, respond with: 'I do not have access to that information. Please type 'menu' to see the available options.'"
 
 
@@ -110,7 +110,7 @@ def displayMenu(database, client, session_id, messages):
           2. Select Session
           3. Clear Current Session
           4. Delete Session
-          5. Exit
+          5. Summarize Current Session
           """)
     choice = input("Enter your choice (1-5): ")
 
@@ -131,7 +131,7 @@ def displayMenu(database, client, session_id, messages):
         clearTerminal()
         session_id = selectSession(database)
         clearTerminal()
-        
+
         if(session_id is None):
             print("You have no sessions. Please create a new session first.\n")
             return displayMenu(database, client, session_id, messages)
@@ -165,25 +165,39 @@ def displayMenu(database, client, session_id, messages):
         database.deleteSession(d_session_id)
         print("Session deleted.\n")
         return displayMenu(database, client, session_id, messages)
+    
+    elif choice == "5": #Summarize Current Session
 
-    elif choice == "5": #Exit
-        print("Exiting...")
-        client.close()
-        exit(0)
+        if(session_id is None or len(messages) <= 2):
+            print("There is nothing to summarize. Kindly enter a session or write some messages in the conversation first\n")
+            return displayMenu(database, client, session_id, messages)
+        
+        messages.append({
+            "role": "user",
+            "content": "Please briefly summarize our conversation so far. Reiterate the key points we discussed in a clear and consice manner."
+        })
+
+        messages = sendMessage(database, client, session_id, messages)
+
+
     else:
         print("Invalid choice. Please try again.")
         return displayMenu(database, client, session_id, messages)
 
     return session_id, messages
 
-def runChatbot(client, database, session_id):
+def runChatbot(client, database):
     #This function handles the conversation
     #It initializes the messages list and prompts the user for input
     #It calls sendMessage to get the model's response and updates the messages list accordingly
-
-    session_id, messages = displayMenu(database, client, session_id, [])
+    #It also handles exit and restart commands for the chat session. Dpending on the command, it willr eturn 0 or 1 respectively.
+    #If 1 is returned, the main function will call runChatbot again to start a new session
 
     try:
+
+        session_id = None
+        session_id, messages = displayMenu(database, client, session_id, [])
+
         #Handeling the conversation
         while True:
             
@@ -191,6 +205,15 @@ def runChatbot(client, database, session_id):
             if user_input.lower() == "menu":
                 session_id, messages = displayMenu(database, client, session_id, messages)
                 continue
+
+            elif user_input.lower() == "restart":
+                print("Restarting the chat session...\n")
+                return 1
+
+            elif user_input.lower() == "exit":
+                print("Exiting the chat...")
+                return 0
+            
 
             messages.append({
                 "role": "user",
@@ -215,10 +238,15 @@ def main():
         api_key=AZURE_OPENAI_API_KEY,
     )
     db = Database(TEST_USER_ID)
-    session_id = None
-
-    runChatbot(client, db, session_id)
     
+    while(runChatbot(client, db) == 1):
+        
+        client = AzureOpenAI(
+            api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_AI_SERVICES_ENDPOINT,
+            api_key=AZURE_OPENAI_API_KEY,
+        )
+        db = Database(TEST_USER_ID)
 
 
 if __name__ == '__main__':
