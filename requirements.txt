@@ -1,5 +1,4 @@
 dotenv
 
-azure-ai-inference
-azure-core
+openai
 azure-cosmos
