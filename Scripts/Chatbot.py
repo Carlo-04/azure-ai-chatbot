@@ -56,9 +56,9 @@ def ensureTokenLimit(database, client, session_id, messages):
 
         messages = sendMessage(database, client, session_id, messages) 
 
-        #last 10 messages + summary will be kept in history. 
+        #last 8 messages + summary will be kept in history. 
         #The rest of the messages will be displayed but not stored within the context window
-        summary_messages = messages[-12:] 
+        summary_messages = messages[-10:] 
         return summary_messages
     else:
         return messages
