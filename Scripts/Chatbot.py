@@ -1,3 +1,6 @@
+from azure.search.documents import SearchClient
+from azure.core.credentials import AzureKeyCredential
+
 from openai import AzureOpenAI
 import tiktoken
 
@@ -17,12 +20,27 @@ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 AZURE_AI_SERVICES_ENDPOINT = os.getenv("AZURE_AI_SERVICES_ENDPOINT")
 
+AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
+AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
+AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
 MAX_TOKENS = 2000
 TEST_USER_ID = os.getenv("TEST_USER_ID")
-DEFAULT_CHATBOT_PROMPT = "You are a helpful assistant. Start the conversation by greeting the user warmly and asking how you can help. " \
-"Inform the user that they can: access the menu by typing 'menu', restart the chat session by typing 'restart', and quit the chat by typing 'exit'." \
-"If asked about the menu options, respond with: 'I do not have access to that information. Please type 'menu' to see the available options.'"
+DEFAULT_CHATBOT_PROMPT = """
+    You are a friendly retrieval-augmented assistant that recommends hotels based on activities and amenities.
+    Answer the query using only the sources provided in each query in a friendly and concise bulleted manner.
+    If there isn't enough information below, say you don't know.
+    Do not generate answers that don't use the provided sources. 
+    Every will have the following format:
+    query: <user query>, sources:\n<formated list of sources>
+    The only exception to this format is when you are asked to summarize the conversation. 
+    In this case, rely only on the conversation history.
+    Once Initialized, greet the user with a welcome message and inform them that they may write "menu", "restart" and "exit" 
+    to access the menu, restart the program (no data will be lost) and exit the program respectively.
+    """
+
+
+
 
 
 def clearTerminal():
@@ -38,11 +56,11 @@ def num_tokens_from_messages(messages):
     num_tokens += 2  # every reply overhead
     return num_tokens
 
-def ensureTokenLimit(database, client, session_id, messages):
+def ensureTokenLimit(database, openai_client, search_client, session_id, messages):
     #This function checks if the token limit is almost reached
     #If the limit is almost reached, it summarizes the conversation and creates a new messages list
     #It returns the new/old messages list
-    print(f"\n/// Current token count: {num_tokens_from_messages(messages)}\n")
+    
     if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.85:
         print("\n/// Token limit almost reached. Summarizing the conversation...\n")
         summary_prompt = "Summarize the conversation so far in a concise manner, retaining important details and context. " \
@@ -54,22 +72,49 @@ def ensureTokenLimit(database, client, session_id, messages):
             "content": summary_prompt
         })
 
-        messages = sendMessage(database, client, session_id, messages) 
+        messages = sendMessage(database, openai_client, search_client, session_id, messages, False) 
 
         #last 8 messages + summary will be kept in history. 
         #The rest of the messages will be displayed but not stored within the context window
-        summary_messages = messages[-10:] 
+        summary_messages = messages[:2] + messages[-10:] 
+
         return summary_messages
     else:
         return messages
 
 
-def sendMessage(database, client, session_id, messages):
-    #This function sends the api request to the model
+def sendMessage(database, openai_client, search_client, session_id, messages, rag=True):
+    #This function is used to handle user messages.
+    #It sends the api request to the ai search model then passes the results to the openai model with the user query.
     # and prints the response as it's being generated
 
+    grounded_prompt = """
+    Use ONLY the information from the sources provided to answer to this query.\n
+    query: {query}, sources:\n{sources}
+    """ 
+    query = messages[-1]['content']
+
+    if rag: #apply rag. typically used for user messages (except for summarization)
+
+        #getting the ai search results
+        search_results = search_client.search(
+            search_text=query,
+            top=5,
+            select="Description,HotelName,Tags"
+        )
+
+        # sources_formatted = "\n".join([f'{document["HotelName"]}:{document["Description"]}:{document["Tags"]}' for document in search_results])
+        sources_formatted = "\n\n".join([
+            f"Hotel: {doc['HotelName']}\n"
+            f"Description: {doc['Description']}\n"
+            f"Tags: {', '.join(doc.get('Tags') or [])}"
+            for doc in search_results
+        ])
+
+        messages[-1]["content"] = grounded_prompt.format(query=query, sources=sources_formatted)
+
     full_reply = ""
-    response = client.chat.completions.create(
+    response = openai_client.chat.completions.create(
         stream=True,
         messages=messages,
         max_tokens=MAX_TOKENS,
@@ -85,6 +130,9 @@ def sendMessage(database, client, session_id, messages):
             full_reply += chunk #since the response is being streamed, we only get access to chunks at a time
     print()
 
+    #replace the last user message with the original query (without sources in the case of RAG)
+    messages[-1]["content"] = query
+
     #typically the last message is the user's message but sometimes it could be a system message
     database.addMessage(session_id, messages[-1]['role'], messages[-1]['content']) 
     database.addMessage(session_id, "assistant", full_reply)
@@ -92,7 +140,7 @@ def sendMessage(database, client, session_id, messages):
     messages.append({
         "role": "assistant",
         "content": full_reply
-        })
+    })
     
     return messages
 
@@ -136,7 +184,7 @@ def craeteNewSession(database, client):
     return session_id
 
 
-def displayMenu(database, client, session_id, messages):
+def displayMenu(database, openai_client, search_client, session_id, messages):
     #returns session_id, messages
     #this function displays the menu and handles user input
     #depending on the user's choice, the session_id and messages may be updated
@@ -154,14 +202,14 @@ def displayMenu(database, client, session_id, messages):
     if choice == "1": #Create New Session
         #creating a new session on the db and returning its id
         clearTerminal()
-        session_id = craeteNewSession(database, client)
+        session_id = craeteNewSession(database, openai_client)
         messages = [
             {
                 "role": "system",
                 "content": DEFAULT_CHATBOT_PROMPT
             }
         ]
-        messages = sendMessage(database, client, session_id, messages)
+        messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
 
         
     elif choice == "2": #Select Session
@@ -171,7 +219,7 @@ def displayMenu(database, client, session_id, messages):
 
         if(session_id is None):
             print("You have no sessions. Please create a new session first.\n")
-            return displayMenu(database, client, session_id, messages)
+            return displayMenu(database, openai_client, search_client, session_id, messages)
         
         messages = displayMessages(database, session_id)
     
@@ -179,7 +227,7 @@ def displayMenu(database, client, session_id, messages):
         clearTerminal()
         if(session_id is None):
             print("You are not currently in a session. Please select or create a session first.\n")
-            return displayMenu(database, client, session_id, messages)
+            return displayMenu(database, openai_client, search_client, session_id, messages)
         
         messages = [
             {
@@ -189,7 +237,7 @@ def displayMenu(database, client, session_id, messages):
         ]
         database.clearSession(session_id)
         print("Current session cleared.\n")
-        messages = sendMessage(database, client, session_id, messages)
+        messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
 
     elif choice == "4": #Delete Session
         clearTerminal()
@@ -197,19 +245,19 @@ def displayMenu(database, client, session_id, messages):
 
         if(d_session_id is None):
             print("You have no sessions. Please create a new session first.\n")
-            return displayMenu(database, client, session_id, messages)
+            return displayMenu(database, openai_client, search_client, session_id, messages)
         
         database.deleteSession(d_session_id)
         print("Session deleted.\n")
-        return displayMenu(database, client, session_id, messages)
+        return displayMenu(database, openai_client, search_client, session_id, messages)
 
     else:
         print("Invalid choice. Please try again.")
-        return displayMenu(database, client, session_id, messages)
+        return displayMenu(database, openai_client, search_client, session_id, messages)
 
     return session_id, messages
 
-def runChatbot(client, database):
+def runChatbot(openai_client, search_client, database):
     #This function handles the conversation
     #It initializes the messages list and prompts the user for input
     #It calls sendMessage to get the model's response and updates the messages list accordingly
@@ -219,14 +267,14 @@ def runChatbot(client, database):
     try:
 
         session_id = None
-        session_id, messages = displayMenu(database, client, session_id, [])
+        session_id, messages = displayMenu(database, openai_client, search_client, session_id, [])
 
         #Handeling the conversation
         while True:
             
             user_input = input("\n/// You: ")
             if user_input.lower() == "menu":
-                session_id, messages = displayMenu(database, client, session_id, messages)
+                session_id, messages = displayMenu(database, openai_client, search_client, session_id, messages)
                 continue
 
             elif user_input.lower() == "restart":
@@ -243,34 +291,47 @@ def runChatbot(client, database):
                  "content": user_input
                 })
                             
-            messages = sendMessage(database, client, session_id, messages)
+            messages = sendMessage(database, openai_client, search_client, session_id, messages)
 
-            messages = ensureTokenLimit(database, client, session_id, messages)
+            messages = ensureTokenLimit(database, openai_client, search_client, session_id, messages)
 
     except Exception as e:
         print("Something went wrong.")
         print(f"Exception details: {e}")
 
     finally:
-        client.close()
+        openai_client.close()
 
 
 def main():
 
-    client = AzureOpenAI(
+    openai_client = AzureOpenAI(
         api_version=AZURE_OPENAI_API_VERSION,
         azure_endpoint=AZURE_AI_SERVICES_ENDPOINT,
         api_key=AZURE_OPENAI_API_KEY,
     )
+    
+    search_client = SearchClient(
+        endpoint=AZURE_SEARCH_ENDPOINT,
+        index_name=AZURE_SEARCH_INDEX_NAME,
+        credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
+    )
     db = Database(TEST_USER_ID)
     
-    while(runChatbot(client, db) == 1):
+    while(runChatbot(openai_client, search_client, db) == 1): #the loop is used to restart the chat session
         
-        client = AzureOpenAI(
+        openai_client = AzureOpenAI(
             api_version=AZURE_OPENAI_API_VERSION,
             azure_endpoint=AZURE_AI_SERVICES_ENDPOINT,
             api_key=AZURE_OPENAI_API_KEY,
         )
+    
+        search_client = SearchClient(
+            endpoint=AZURE_SEARCH_ENDPOINT,
+            index_name=AZURE_SEARCH_INDEX_NAME,
+            credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
+        )
+        
         db = Database(TEST_USER_ID)
 
 
