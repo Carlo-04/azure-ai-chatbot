@@ -13,6 +13,8 @@ This exercise utilized the following azure resources:
         all AI features.</li>
     <li><b>Azure AI Foundry Project:</b> Used to deploy openAI models.
         It is where the API key and endpoints are configured.</li>
+    <li><b>Azure Cosmo DB:</b> Used to store chat and user history to be accessed by the code.</li>
+    <li><b>Azure AI Search:</b> Used to apply RAG to the chatbot.</li>
 </ul>
 
 ### OpenAI Model
@@ -24,27 +26,44 @@ specific use case is considered (eg: customer support for a car dealership),
 extra content filtering settings may be set in the AI Foundry Portal or through
 System Messages from the script.
 
-### Code Details
-A simple text-based chatbot was implemented using the Azure AI Inference SDK. 
+### Azure Cosmo DB
+A simple NoSQL database was setup and linked to the chatbot. The database contains 3 types of documents: user profile, session, and message (of any role). Each user can have multiple sessions and every session contains a list of messages.
 
-Once the script is run, a chat completion client is initiated and its
-behaviour is defined through an initial system message. Since the chatbot 
-is constrained to text dialogue, a chat completion client was chosen without an agent.
-If more features and tools are needed later, we may utilize an agent.
+A user profile document contains the following attributes:
+<ul>
+  <li>id</li>
+  <li>firstName</li>
+  <li>lastName</li>
+  <li>documentType: "user"</li>
+  <li>createdAt</li>
+</ul>
 
-A simple conversation loop was implemented in which the user may send input and receive replies
-from the model though the terminal. Prompts were sent using API calls to the OpenAI model in the 
-AI Foundry project.
+A session document contains the following attributes:
+<ul>
+  <li>id</li>
+  <li>userId</li>
+  <li>sessionTitle</li>
+  <li>documentType: "session"</li>
+  <li>createdAt</li>
+</ul>
 
-Furthermore, since chat completion clients are essentially stateless, the code also manually
-the messaging history and passes it within each request to the model.
+A message document contains the following attributes:
+<ul>
+  <li>id</li>
+  <li>userId</li>
+  <li>sessionId</li>
+  <li>documentType: "message"</li>
+  <li>role</li>
+  <li>content</li>
+  <li>sentAt</li>
+</ul>
+
+The userId was selected as the partition key.
+
 
 ### Basic Chatbot Architecture
 <p align="center">
-  <img src="Chatbot Architecture.png" alt="Description" width="500"/>
+  <img src="Chatbot Architecture v1.1.png" alt="Description" width="500"/>
 </p>
 
 ### Function App Chatbot Architecture
-<p align="center">
-  <img src="Function App Chatbot Architecture.png" alt="Description" width="500"/>
-</p>
