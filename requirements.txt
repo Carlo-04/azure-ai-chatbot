@@ -2,3 +2,5 @@ dotenv
 tiktoken
 openai
 azure-cosmos
+azure-search-documents
+azure-core
