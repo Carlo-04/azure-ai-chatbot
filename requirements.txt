@@ -3,4 +3,4 @@ tiktoken
 openai
 azure-cosmos
 azure-search-documents
-azure-core-credentials
+azure-core
