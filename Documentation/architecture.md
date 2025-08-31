@@ -18,13 +18,15 @@ This exercise utilized the following azure resources:
 </ul>
 
 ### OpenAI Model
-Within the AI Foundry project, a GPT-4o model was deployed using a global deployment. 
+Within the AI Foundry project, a GPT-4o model was deployed using a global deployment. The model is to be used as a personal assistant that helps you choose a hotel to book. For this model, the default content filters were kept.
 
-The model is to be used as a personal assistant. Considering the broad scope of 
-this assignment, the default content filters were kept. Later on if a more 
-specific use case is considered (eg: customer support for a car dealership), 
-extra content filtering settings may be set in the AI Foundry Portal or through
-System Messages from the script.
+When a user submits a prompt, the following steps are taken:
+<ol>
+  <li>The user query is sent to the Azure AI Search resource, which queries the <i>hotels-sample</i> index. This index contains structured hotel information such as descriptions, tags, and metadata.</li>
+  <li>The retrieved documents (top-k results) are formatted into a structured context which includes the hotels' names, descriptions, categories, and tags.</li>
+  <li>GPT-4o processes the grounded input and generates a response. If no relevant results are retrieved from the index, the model is instructed to inform the user that it is unable to provide an answer.</li>
+  <li>The current messages list's token count is estimated and compared to the set token limit. In case the limit is nearly reached, the conversation is summarized and the messages list is shortened to remain within the context window.</li>
+</ol>
 
 ### Azure Cosmo DB
 A simple NoSQL database was setup and linked to the chatbot. The database contains 3 types of documents: user profile, session, and message (of any role). Each user can have multiple sessions and every session contains a list of messages.
@@ -67,3 +69,6 @@ The userId was selected as the partition key.
 </p>
 
 ### Function App Chatbot Architecture
+<p align="center">
+  <img src="Function App Chatbot Architecture v1.1.png" alt="Description" width="500"/>
+</p>
