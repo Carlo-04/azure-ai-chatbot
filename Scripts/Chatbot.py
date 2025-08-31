@@ -24,7 +24,7 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
-MAX_TOKENS = 2000
+MAX_TOKENS = 2500
 TEST_USER_ID = os.getenv("TEST_USER_ID")
 DEFAULT_CHATBOT_PROMPT = """
     You are a friendly retrieval-augmented assistant that recommends hotels based on activities and amenities.
@@ -61,7 +61,7 @@ def ensureTokenLimit(database, openai_client, search_client, session_id, message
     #If the limit is almost reached, it summarizes the conversation and creates a new messages list
     #It returns the new/old messages list
     
-    if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.85:
+    if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.8:
         print("\n/// Token limit almost reached. Summarizing the conversation...\n")
         summary_prompt = "Summarize the conversation so far in a concise manner, retaining important details and context. " \
         "The summary should be brief and to the point, capturing the essence of the discussion without unnecessary elaboration. " \
@@ -74,11 +74,16 @@ def ensureTokenLimit(database, openai_client, search_client, session_id, message
 
         messages = sendMessage(database, openai_client, search_client, session_id, messages, False) 
 
-        #last 8 messages + summary will be kept in history. 
+        #last 5 messages + summary will be kept in history. 
         #The rest of the messages will be displayed but not stored within the context window
-        summary_messages = messages[:2] + messages[-10:] 
+        if(len(messages) > 10):
+            summary_messages = messages[:2] + messages[-7:] 
+
+        else:
+            summary_messages = messages[:2] + messages[-2:] #only keep the summary and the system prompt 
 
         return summary_messages
+    
     else:
         return messages
 
@@ -118,8 +123,7 @@ def sendMessage(database, openai_client, search_client, session_id, messages, ra
         stream=True,
         messages=messages,
         max_tokens=MAX_TOKENS,
-        temperature=1.0,
-        top_p=1.0,
+        temperature=0.75,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
     )
 
