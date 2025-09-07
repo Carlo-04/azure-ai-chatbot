@@ -1,5 +1,6 @@
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
+from azure.search.documents.models import VectorizedQuery
 
 from openai import AzureOpenAI
 import tiktoken
@@ -19,6 +20,7 @@ AZURE_OPENAI_MODEL_NAME = os.getenv("AZURE_OPENAI_MODEL_NAME")
 AZURE_OPENAI_CHAT_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 AZURE_AI_SERVICES_ENDPOINT = os.getenv("AZURE_AI_SERVICES_ENDPOINT")
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
 
 AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
@@ -27,20 +29,20 @@ AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 MAX_TOKENS = 2500
 TEST_USER_ID = os.getenv("TEST_USER_ID")
 DEFAULT_CHATBOT_PROMPT = """
-    You are a friendly retrieval-augmented assistant that recommends hotels based on activities and amenities.
-    Answer the query using only the sources provided in each query in a friendly and concise bulleted manner.
-    If there isn't enough information below, say you don't know.
-    Do not generate answers that don't use the provided sources. 
-    Every will have the following format:
+    You are a friendly retrieval-augmented assistant that serves as a car salesman for a dealership.
+    You are in a marketing and sales role, but you cannot give the customer any offers or discounts.
+    If the customer asks for offers, invoices or anything related to pricing, you should politely refuse 
+    and inform them that you are not authorized to provide such information. You may only give them the listed 
+    price of the vehicle and inform them that they can contact the dealership for any offers or discounts.
+    Answer the query using only the sources provided in each query in a friendly and concise manner.
+    If there isn't enough information below, say you don't know and tell the user to ask questions related to your scope.
+    Every message will have the following format:
     query: <user query>, sources:\n<formated list of sources>
     The only exception to this format is when you are asked to summarize the conversation. 
     In this case, rely only on the conversation history.
     Once Initialized, greet the user with a welcome message and inform them that they may write "menu", "restart" and "exit" 
     to access the menu, restart the program (no data will be lost) and exit the program respectively.
     """
-
-
-
 
 
 def clearTerminal():
@@ -101,18 +103,37 @@ def sendMessage(database, openai_client, search_client, session_id, messages, ra
 
     if rag: #apply rag. typically used for user messages (except for summarization)
 
-        #getting the ai search results
-        search_results = search_client.search(
-            search_text=query,
-            top=5,
-            select="Description,HotelName,Tags"
-        )
+        #embedding the query
+        embed_query = openai_client.embeddings.create(
+            input=query,
+            model=AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME
+        ).data[0].embedding
 
-        # sources_formatted = "\n".join([f'{document["HotelName"]}:{document["Description"]}:{document["Tags"]}' for document in search_results])
+        vector_query = VectorizedQuery(
+                vector=embed_query,
+                k_nearest_neighbors=5,
+                fields="text_vector",
+                kind="vector",
+                exhaustive=True
+            )
+
+        #retrieving documents (hybrid search)
+        search_results = search_client.search(
+                    include_total_count=True,
+                    search_text=query,  
+                    select="brand,model,type,year,price,chunk,features",
+                    top=5,
+                    vector_queries=[vector_query]
+                )
+
         sources_formatted = "\n\n".join([
-            f"Hotel: {doc['HotelName']}\n"
-            f"Description: {doc['Description']}\n"
-            f"Tags: {', '.join(doc.get('Tags') or [])}"
+            f"Brand: {doc['brand']}\n"
+            f"Model: {doc['model']}\n"
+            f"Type: {doc['type']}\n"
+            f"Year: {doc['year']}\n"
+            f"Price: {doc['price']}\n"
+            f"Description: {doc['chunk']}\n"
+            f"Features: {', '.join(doc.get('features') or [])}"
             for doc in search_results
         ])
 
