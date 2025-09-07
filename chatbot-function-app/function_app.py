@@ -25,7 +25,7 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
-MAX_TOKENS = 2500
+MAX_TOKENS = 3000
 TEST_USER_ID = "16b8fef2-4058-4654-bbba-6bffe2058d28"
 DEFAULT_CHATBOT_PROMPT = """
     You are a friendly retrieval-augmented assistant that serves as a car salesman for a dealership.
@@ -39,8 +39,11 @@ DEFAULT_CHATBOT_PROMPT = """
     query: <user query>, sources:\n<formated list of sources>
     The only exception to this format is when you are asked to summarize the conversation. 
     In this case, rely only on the conversation history.
-    Once Initialized, greet the user with a welcome message and inform them that they may write "menu", "restart" and "exit" 
-    to access the menu, restart the program (no data will be lost) and exit the program respectively.
+    Once Initialized, greet the user with a welcome message and introduce yourself.
+    If the user is sending a greeting, asking you how are you, or making minor small talk you may reply 
+    like a friendly salesman (ignore the sources provided).
+    If any of the provided sources are in Arabic, translate them before relaying them to the user. 
+    You may only generate responses in English.
     """
 
 
@@ -63,7 +66,7 @@ def ensureTokenLimit(database, openai_client, search_client, session_id, message
     #It returns the new/old messages list
     
     if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.8:
-        print("\n/// Token limit almost reached. Summarizing the conversation...\n")
+
         summary_prompt = "Summarize the conversation so far in a concise manner, retaining important details and context. " \
         "The summary should be brief and to the point, capturing the essence of the discussion without unnecessary elaboration. " \
         "The summary will be used to maintain context in future interactions, so ensure it is clear and informative."
@@ -95,7 +98,9 @@ def sendMessage(database, openai_client, search_client, session_id, messages, ra
     # and prints the response as it's being generated
 
     grounded_prompt = """
-    Use ONLY the information from the sources provided to answer to this query.\n
+    Provide an answer to this query while referring to the sources provided. Answer ONLY in english (translate the source if need be). 
+    If the user is sending a greeting, asking you how are you, or making minor small talk you may reply 
+    like a friendly salesman (ignore the sources provided).\n
     query: {query}, sources:\n{sources}
     """ 
     query = messages[-1]['content']
@@ -140,19 +145,14 @@ def sendMessage(database, openai_client, search_client, session_id, messages, ra
 
     full_reply = ""
     response = openai_client.chat.completions.create(
-        stream=True,
+        stream=False,
         messages=messages,
         max_tokens=MAX_TOKENS,
         temperature=0.75,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
     )
 
-    for update in response:
-        if update.choices:
-            chunk = update.choices[0].delta.content or ""
-            print(chunk, end="", flush=True)  # live printing
-            full_reply += chunk #since the response is being streamed, we only get access to chunks at a time
-    print()
+    full_reply = response.choices[0].message.content
 
     #replace the last user message with the original query (without sources in the case of RAG)
     messages[-1]["content"] = query
@@ -230,17 +230,19 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
                 messages=messages,
                 rag=rag
             )
-            ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)
-
+            
+            reply = updated_messages[-1]["content"]
+            #ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)  Needs fixing. 
+            # I have to call it after retrieving the messages and before sending the prompt
             return func.HttpResponse(
-                json.dumps({"messages": updated_messages}, ensure_ascii=False),
+                json.dumps({"reply": reply}, ensure_ascii=False).encode('utf-8'),
                 status_code=200,
                 mimetype="application/json"
             )
         
         elif command == "getmessages":
             return func.HttpResponse(
-                json.dumps({"messages": messages}, ensure_ascii=False),
+                json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
                 status_code=200,
                 mimetype="application/json"
             )
@@ -256,7 +258,7 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
             database.clearSession(session_id)
             messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
             return func.HttpResponse(
-                json.dumps({"messages": messages}, ensure_ascii=False),
+                json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
                 status_code=200,
                 mimetype="application/json"
             )
