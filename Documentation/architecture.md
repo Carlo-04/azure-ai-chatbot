@@ -65,10 +65,10 @@ The userId was selected as the partition key.
 
 ### Basic Chatbot Architecture
 <p align="center">
-  <img src="Chatbot Architecture v1.1.png" alt="Description" width="500"/>
+  <img src="Chatbot Architecture v1.2.png" alt="Description" width="500"/>
 </p>
 
 ### Function App Chatbot Architecture
 <p align="center">
-  <img src="Function App Chatbot Architecture v1.1.png" alt="Description" width="500"/>
+  <img src="Function App Chatbot Architecture v1.2.png" alt="Description" width="500"/>
 </p>
