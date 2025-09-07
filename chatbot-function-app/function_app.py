@@ -185,6 +185,7 @@ def initializeClients(user_id):
     db = Database(user_id)
 
     return openai_client, search_client, db
+    
 
 ############
 ## Function Apps
@@ -199,12 +200,11 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         req_body = req.get_json()
         user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
         session_id = req_body.get("session_id")
-        query = req_body.get("query")
-        rag = req_body.get("rag", True)
+        command = req_body.get("command").lower() #this is used to handle special commands like getMessages, clearChat, sendQuery
 
-        if not session_id or not query:
+        if not session_id or not user_id:
             return func.HttpResponse(
-                json.dumps({"error": "session_id and messages are required"}),
+                json.dumps({"error": "user_id and session_id are required"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -212,27 +212,58 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         openai_client, search_client, database = initializeClients(user_id)
         messages = database.getMessages(session_id)
 
-        messages.append({
-            "role": "user",
-            "content": query
-        })
+        if command == "sendquery":
+            query = req_body.get("query")
+            rag = req_body.get("rag", True)
 
-        # Call your existing function
-        updated_messages = sendMessage(
-            database=database,
-            openai_client=openai_client,
-            search_client=search_client,
-            session_id=session_id,
-            messages=messages,
-            rag=rag
-        )
-        ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)
+            messages.append({
+                "role": "user",
+                "content": query
+            })
 
-        return func.HttpResponse(
-            json.dumps({"messages": updated_messages}, ensure_ascii=False),
-            status_code=200,
-            mimetype="application/json"
-        )
+            # Call your existing function
+            updated_messages = sendMessage(
+                database=database,
+                openai_client=openai_client,
+                search_client=search_client,
+                session_id=session_id,
+                messages=messages,
+                rag=rag
+            )
+            ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)
+
+            return func.HttpResponse(
+                json.dumps({"messages": updated_messages}, ensure_ascii=False),
+                status_code=200,
+                mimetype="application/json"
+            )
+        
+        elif command == "getmessages":
+            return func.HttpResponse(
+                json.dumps({"messages": messages}, ensure_ascii=False),
+                status_code=200,
+                mimetype="application/json"
+            )
+        
+        elif command == "clearchat":
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": DEFAULT_CHATBOT_PROMPT
+                }
+            ]
+            database.clearSession(session_id)
+            messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
+            return func.HttpResponse(
+                json.dumps({"messages": messages}, ensure_ascii=False),
+                status_code=200,
+                mimetype="application/json"
+            )
+        
+        
+        
+        
 
     except Exception as e:
         logging.exception("Error in sendMessage HTTP trigger")
