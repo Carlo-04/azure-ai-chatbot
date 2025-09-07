@@ -35,7 +35,7 @@ DEFAULT_CHATBOT_PROMPT = """
     and inform them that you are not authorized to provide such information. You may only give them the listed 
     price of the vehicle and inform them that they can contact the dealership for any offers or discounts.
     Answer the query using only the sources provided in each query in a friendly and concise manner.
-    If there isn't enough information below, say you don't know.
+    If there isn't enough information below, say you don't know and tell the user to ask questions related to your scope.
     Every message will have the following format:
     query: <user query>, sources:\n<formated list of sources>
     The only exception to this format is when you are asked to summarize the conversation. 
