@@ -190,9 +190,12 @@ def initializeClients(user_id):
 ############
 ## Function Apps
 ###########
+
+
+#########   Sending a Message #################
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-@app.function_name(name="HttpChatbotTrigger")
-@app.route(route="http_chatbot_trigger", methods=["POST"])
+@app.function_name(name="MessageTrigger")
+@app.route(route="http_chatbot_message", methods=["POST"])
 def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
@@ -200,7 +203,6 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         req_body = req.get_json()
         user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
         session_id = req_body.get("session_id")
-        command = req_body.get("command").lower() #this is used to handle special commands like getMessages, clearChat, sendQuery
 
         if not session_id or not user_id:
             return func.HttpResponse(
@@ -212,59 +214,119 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         openai_client, search_client, database = initializeClients(user_id)
         messages = database.getMessages(session_id)
 
-        if command == "sendquery":
-            query = req_body.get("query")
-            rag = req_body.get("rag", True)
+        query = req_body.get("query")
+        rag = req_body.get("rag", True)
 
-            messages.append({
-                "role": "user",
-                "content": query
-            })
+        messages.append({
+            "role": "user",
+            "content": query
+        })
 
-            # Call your existing function
-            updated_messages = sendMessage(
-                database=database,
-                openai_client=openai_client,
-                search_client=search_client,
-                session_id=session_id,
-                messages=messages,
-                rag=rag
-            )
-            
-            reply = updated_messages[-1]["content"]
-            #ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)  Needs fixing. 
-            # I have to call it after retrieving the messages and before sending the prompt
+        # Call your existing function
+        updated_messages = sendMessage(
+            database=database,
+            openai_client=openai_client,
+            search_client=search_client,
+            session_id=session_id,
+            messages=messages,
+            rag=rag
+        )
+        
+        reply = updated_messages[-1]["content"]
+        #ensureTokenLimit(database, openai_client, search_client, session_id, updated_messages)  Needs fixing. 
+        # I have to call it after retrieving the messages and before sending the prompt
+        return func.HttpResponse(
+            json.dumps({"reply": reply}, ensure_ascii=False).encode('utf-8'),
+            status_code=200,
+            mimetype="application/json"
+        )    
+
+    except Exception as e:
+        logging.exception("Error in sendMessage HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+    finally:
+        openai_client.close()
+
+
+
+#########   Getting the List of Messages #################
+@app.function_name(name="GetMessagesTrigger")
+@app.route(route="http_chatbot_get_messages", methods=["POST"])
+def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        req_body = req.get_json()
+        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        session_id = req_body.get("session_id")
+
+        if not session_id or not user_id:
             return func.HttpResponse(
-                json.dumps({"reply": reply}, ensure_ascii=False).encode('utf-8'),
-                status_code=200,
+                json.dumps({"error": "user_id and session_id are required"}),
+                status_code=400,
                 mimetype="application/json"
             )
         
-        elif command == "getmessages":
+        openai_client, search_client, database = initializeClients(user_id)
+        messages = database.getMessages(session_id)
+        
+        return func.HttpResponse(
+            json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in sendMessage HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+    finally:
+        openai_client.close()
+
+
+#########   Clearing Messages #################
+@app.function_name(name="ClearChatTrigger")
+@app.route(route="http_chatbot_clear_chat", methods=["POST"])
+def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        req_body = req.get_json()
+        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        session_id = req_body.get("session_id")
+
+        if not session_id or not user_id:
             return func.HttpResponse(
-                json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
-                status_code=200,
+                json.dumps({"error": "user_id and session_id are required"}),
+                status_code=400,
                 mimetype="application/json"
             )
         
-        elif command == "clearchat":
-            
-            messages = [
-                {
-                    "role": "system",
-                    "content": DEFAULT_CHATBOT_PROMPT
-                }
-            ]
-            database.clearSession(session_id)
-            messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
-            return func.HttpResponse(
-                json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
-                status_code=200,
-                mimetype="application/json"
-            )
-        
-        
-        
+        openai_client, search_client, database = initializeClients(user_id)
+        messages = database.getMessages(session_id)
+
+        messages = [
+            {
+                "role": "system",
+                "content": DEFAULT_CHATBOT_PROMPT
+            }
+        ]
+        database.clearSession(session_id)
+        messages = sendMessage(database, openai_client, search_client, session_id, messages, False)
+        return func.HttpResponse(
+            json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
+            status_code=200,
+            mimetype="application/json"
+        )      
         
 
     except Exception as e:
@@ -277,4 +339,5 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
     
     finally:
         openai_client.close()
+
 
