@@ -15,14 +15,17 @@ This exercise utilized the following azure resources:
         It is where the API key and endpoints are configured.</li>
     <li><b>Azure Cosmo DB:</b> Used to store chat and user history to be accessed by the code.</li>
     <li><b>Azure AI Search:</b> Used to apply RAG to the chatbot.</li>
+    <li><b>Azure AI Services:</b> Used to store the Document Intelligence models for parsing raw data.</li>
+    <li><b>Azure Storage Account:</b> Used to store the raw and parsed data to be used to train the Document Intelligence models and to store the data for the AI Search resource.</li>
 </ul>
 
 ### OpenAI Model
-Within the AI Foundry project, a GPT-4o model was deployed using a global deployment. The model is to be used as a personal assistant that helps you choose a hotel to book. For this model, the default content filters were kept.
+Within the AI Foundry project, a GPT-4o model was deployed using a global deployment. The model is to be used as a friendly salesperson that helps you browse from the available cars in a dealership.
 
 When a user submits a prompt, the following steps are taken:
 <ol>
-  <li>The user query is sent to the Azure AI Search resource, which queries the <i>hotels-sample</i> index. This index contains structured hotel information such as descriptions, tags, and metadata.</li>
+  <li>The user query is vectorized using an OpenAI embedding model. A vector query is then generated using the created embedding.</li>
+  <li>The query is sent to the Azure AI Search resource, which queries the search index. This index contains structured vehicle information such as brand, model, year, etc.</li>
   <li>The retrieved documents (top-k results) are formatted into a structured context which includes the hotels' names, descriptions, categories, and tags.</li>
   <li>GPT-4o processes the grounded input and generates a response. If no relevant results are retrieved from the index, the model is instructed to inform the user that it is unable to provide an answer.</li>
   <li>The current messages list's token count is estimated and compared to the set token limit. In case the limit is nearly reached, the conversation is summarized and the messages list is shortened to remain within the context window.</li>
