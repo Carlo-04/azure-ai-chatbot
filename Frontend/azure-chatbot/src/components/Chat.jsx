@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import ReactMarkdown from "react-markdown";
+import SpeechInput from './SpeechToText';
+import TextToSpeech from './TextToSpeech';
+import 'primeicons/primeicons.css';
+
 
 export default function Chat() {
   const [messages, setMessages] = useState([]);
@@ -13,6 +17,10 @@ export default function Chat() {
     
     handleGetMessages();
   }, []); 
+
+  const handleSetInput = (text) => {
+    setInput(prevInput => prevInput + " " + text);
+  }
     
   const handleGetMessages = async () => {
 
@@ -58,54 +66,67 @@ export default function Chat() {
       setMessages(prev => [...prev, { 'role': 'bot', 'content': response.data.reply }]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { 'role': 'bot', 'content': '⚠️ Error: could not get response' }]);
+      setMessages(prev => [...prev, { 'role': 'bot', 'content': '⚠️ Error: could not get response' }]); 
     }
   }
 
   return (
-    <div style={{ maxWidth: '800px', margin: 'auto'}}>
-      <div
-      style={{
-        border: "1px solid #ccc",
-        borderRadius: "20px",
-        padding: "10px",
-        minHeight: "300px",
-        height: "75%",
-        overflowY: "auto",
-        backgroundColor: "#111111ff",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div className='max-w-1/2 m-auto'>
+      <div className="
+        border border-gray-300      
+        rounded-2xl             
+        p-2.5                     
+        min-h-75         
+        h-3/4               
+        overflow-y-auto         
+        bg-bg-tertiary         
+        flex flex-col             
+      ">
       {messages.map((msg, index) => (
-        <div
+        <div 
           key={index}
-          style={{
-            textAlign: 'left',
-            alignSelf: msg.role === "user" ? "flex-end" : "flex-start", 
-            maxWidth: "70%", 
-            border: "0px",
-            borderRadius: "20px",
-            padding: "0px 12px",
-            backgroundColor: msg.role === "user" ? "#3f3f3fff" : "#111111ff",
-            marginBottom: "5px",
-            wordBreak: "break-word", 
-          }}
+          className={`flex items-center ${msg.role === "user" ? "justify-end" : "justify-start"} mb-2`}
         >
-          <ReactMarkdown>{msg.content}</ReactMarkdown>
+          <div
+            key={index}
+            className={`
+              text-left
+              ${msg.role === "user" ? "self-end bg-bg-tertiary" : "self-start bg-bg-secondary"}
+              max-w-3/4
+              rounded-2xl
+              px-3 py-2
+              mb-2
+              break-words
+            `}
+          >
+            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          </div>
+          
+            {msg.role === "assistant" &&
+              <div className='flex 
+                items-center 
+                justify-center 
+                h-10 w-10 
+                rounded-full
+                ml-2 
+                bg-bg-secondary'>
+                <TextToSpeech text={msg.content}/>
+              </div>
+            }
+          
         </div>
       ))}
-    </div>
+    </div> 
 
 
       <div>
-        <div style={{ marginTop: '10px', display: 'flex', gap: '5px' }}>
+        <div className="flex flex-row mt-10 gap-5 items-center">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Type a message..."
-            style={{ flex: 1, padding: '5px', height: '30px', borderRadius: '10px', borderWidth: '0px' }}
+            className='flex flex-1 p-5 h-3 rounded-md border-1'
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && input != '') {
                 e.preventDefault(); // prevent newline in the input
@@ -113,10 +134,29 @@ export default function Chat() {
               }
             }}
           />
-        </div>
-        <div style={{marginTop: '10px', display: 'flex', gap: '5px'}}>
-          <button onClick={handleSend} style = {{width: '50%'}}>Send</button>
-          <button onClick={handleClearMessages} style = {{width: '50%'}}>Clear</button>
+          <div className='flex flex-row gap-2'>
+            <button 
+              onClick={handleClearMessages} 
+              className='flex 
+                items-center 
+                justify-center 
+                h-1/1 w-3 
+                rounded-full 
+                bg-bg-secondary'>
+              <i className='pi pi-times'></i>
+            </button>
+            <SpeechInput onSetInput={handleSetInput}/>
+            <button 
+              onClick={handleSend} 
+              className='flex 
+                items-center 
+                justify-center 
+                h-1/1 w-3 
+                rounded-full 
+                bg-bg-secondary'>
+              <i className='pi pi-send'></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
