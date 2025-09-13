@@ -10,3 +10,5 @@ azure-cosmos
 azure-search-documents
 azure-core
 azure-identity
+azure-ai-formrecognizer
+azure-cognitiveservices-speech
