@@ -4,8 +4,7 @@ import './App.css'
 
 import Chat from './components/Chat'
 import KnowledgeBaseManager from './pages/KnowledgeBaseManager';
-import CreateIndex from './pages/CreateIndex';
-import AddDocuments from './pages/AddDocuments';
+import EditDocuments from './pages/EditDocuments';
 
 function App() {
 
@@ -17,8 +16,7 @@ function App() {
         <Route path="/" element={<Chat/>} />
         {/* Admin Pages */}
         <Route path="/knowledge-management" element={<KnowledgeBaseManager />} />
-        <Route path="/create-index" element={<CreateIndex />} />
-        <Route path="/add-docs" element={<AddDocuments />} />
+        <Route path="/edit-docs" element={<EditDocuments />} />
       </Routes>
     </Router>
   )

@@ -3,13 +3,15 @@ import axios from 'axios';
 import ReactMarkdown from "react-markdown";
 import SpeechInput from './SpeechToText';
 import TextToSpeech from './TextToSpeech';
+import { useUser } from '../contexts/UserContext';
 import 'primeicons/primeicons.css';
 
 
 export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const user_id = "16b8fef2-4058-4654-bbba-6bffe2058d28";
+  const { userId, setUserId } = useUser();
+
   const session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
 
 
@@ -25,7 +27,7 @@ export default function Chat() {
   const handleGetMessages = async () => {
 
     const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages?', {
-      "user_id": user_id,
+      "user_id": userId,
       "session_id": session_id,
     });
     
