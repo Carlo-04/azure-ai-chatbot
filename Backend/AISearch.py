@@ -5,6 +5,7 @@
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.indexes import SearchIndexClient
+from azure.ai.formrecognizer import DocumentAnalysisClient, DocumentField
 from azure.search.documents.indexes.models import (
     SearchIndex,
     SimpleField,
@@ -19,7 +20,9 @@ from azure.search.documents.indexes.models import (
     VectorSearchProfile
 )
 from openai import AzureOpenAI
+import json
 import os
+import uuid
 
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
@@ -198,7 +201,7 @@ def vectorizeString(text):
 ################
 # Add Document to an Index 
 ###############
-def addDocuments(index_name, documents, vector_fields=[], chunk_size=500):
+def addDocuments(index_name, documents, vector_fields=[], chunk_size=100):
 
     # Uploads documents to a vector search index with vectorization and chunking.
     # The function only expects an id field to be present in the search index
@@ -219,6 +222,7 @@ def addDocuments(index_name, documents, vector_fields=[], chunk_size=500):
     docs_to_upload = []
     for doc in documents:
         doc_id = doc.get("id")
+
         for field in vector_fields:
             if field not in doc:
                 continue
@@ -227,13 +231,13 @@ def addDocuments(index_name, documents, vector_fields=[], chunk_size=500):
 
             for i, chunk in enumerate(chunks):
                 doc_chunk = {
-                    "id": f"{doc_id}_{field}_{i}",   # unique id for chunk
-                    #"source_id": doc_id,             # link to original document
-                    #field: chunk,
+                    "chunk_id": f"{doc_id}_{field}_{i}",   
+                    "parent_id": doc_id,             
+                    "chunk": chunk,
                     f"{field}_vector": vectorizeString(chunk)
                 }
                 for k, v in doc.items():
-                    if k not in vector_fields and k != "id":
+                    if k not in vector_fields:
                         doc_chunk[k] = v
                 docs_to_upload.append(doc_chunk)
     
@@ -253,6 +257,18 @@ def getKeyField(index_name):
 
     raise ValueError(f"No key field found for index {index_name}")
 
+#################
+# Get fields info
+###############
+def getFields(index_name):
+    #Returns a list of dics containing info about each field
+    credential = AzureKeyCredential(AZURE_SEARCH_API_KEY)
+    index_client = SearchIndexClient(endpoint=AZURE_SEARCH_ENDPOINT, credential=credential)
+    index = index_client.get_index(index_name)
+    fields = []
+
+    for field in index.fields:
+        fields.append({"name": field.name, "type": field.type})
 
 ###################
 # Delete a Document in an Index
@@ -273,3 +289,66 @@ def deleteIndex(index_name):
 
     index_client.delete_index(index_name)     
 
+
+def fieldToValue(field):
+    """Recursively convert DocumentField to JSON-serializable Python values."""
+    if field is None:
+        return None
+
+    if isinstance(field, DocumentField):
+        if field.value_type == "list":
+            return [fieldToValue(item) for item in field.value]
+        elif field.value_type == "dictionary":
+            clean_dict = {k: fieldToValue(v) for k, v in field.value.items()}
+            # Special case: if it's just {"COLUMN1": "something"} → return the value directly
+            if list(clean_dict.keys()) == ["COLUMN1"]:
+                return clean_dict["COLUMN1"]
+            return clean_dict
+        elif field.value_type == "date":
+            return field.value.isoformat() if field.value else None
+        else:
+            return field.value
+    else:
+        return field
+    
+#############
+# Process Document with Doc Intelligence
+############
+def scanDocuments(files):
+    """
+    Receives a dict of uploaded files (werkzeug.datastructures.FileStorage),
+    runs Azure Document Intelligence 'prebuilt-read' model,
+    and returns a list of parsed JSON objects for vector DB ingestion.
+    """
+
+    endpoint = os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
+    key = os.getenv("AZURE_OPENAI_API_KEY")
+
+    client = DocumentAnalysisClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+
+    results = []
+
+    for filename in files:
+        uploaded_file = files[filename]
+        content = uploaded_file.read()
+
+        poller = client.begin_analyze_document(
+            model_id="prebuilt-read",  
+            document=content
+        )
+        result = poller.result()
+        document_id = str(uuid.uuid4())  
+
+        for page_num, page in enumerate(result.pages, start=1):
+            page_text = " ".join([line.content for line in page.lines])
+
+            parsed_result = {
+                "id": f"{document_id}-page{page_num}",  
+                "fileName": uploaded_file.filename,
+                "pageNumber": page_num,
+                "content": page_text, 
+            }
+
+            results.append(parsed_result)
+
+    return results

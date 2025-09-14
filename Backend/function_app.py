@@ -296,15 +296,67 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
         req_body = req.get_json()
         user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
         index_name = req_body.get("index_name")
-        index_fields = req_body.get("index_fields")
 
-        if not user_id or not index_name or not index_fields:
+
+        if not user_id or not index_name:
             return func.HttpResponse(
                 json.dumps({"error": "user_id, index_name, and index_fields are required"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
+        index_list = AISearch.listIndexes()
+        if(index_name in index_list):
+            return func.HttpResponse(
+                json.dumps({"error": "Index name is already in use"}),
+                status_code=409,
+                mimetype="application/json"
+            )
+        
+        index_fields = [
+            {
+                "field_name": "id",
+                "field_type": "SimpleField",
+                "data_type": "Edm.String",
+                "filterable": True
+            },
+            {
+                "field_name": "parent_id",
+                "field_type": "SimpleField",
+                "data_type": "Edm.String",
+                "filterable": True
+            },
+            {
+                "field_name": "chunk_id",
+                "field_type": "SimpleField",
+                "data_type": "Edm.String",
+                "filterable": True,
+                "key": True
+            },
+            {
+                "field_name": "chunk",
+                "field_type": "SearchableField",
+                "data_type": "Edm.String"
+            },
+            {
+                "field_name": "content_vector",
+                "field_type": "SearchField"
+            },
+            {
+                "field_name": "fileName",
+                "field_type": "SearchableField",
+                "data_type": "Edm.String",
+                "filterable": True
+            },
+            {
+                "field_name": "pageNumber",
+                "field_type": "SimpleField",
+                "data_type": "Edm.Int32",
+                "filterable": True,
+                "sortable": True
+            }
+        ]
+
         AISearch.createIndex(index_name= index_name, index_fields=index_fields)
         
         return func.HttpResponse(
@@ -325,37 +377,26 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
 #
 @app.function_name(name="AddDocuments")
 @app.route(route="http_ai_search_add_documents", methods=["POST"])
-def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
-
+def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
+    #This function receives files, processes them with document intelligence and adds them to the index
     try:
-        # Parse request body
-        req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
-        index_name = req_body.get("index_name")
-        documents = req_body.get("documents")
-        vector_fields = req_body.get(vector_fields)
+        # Get all uploaded files
+        files = req.files
+        index_name = req.form.get("index_name")
+        if not files:
+            return func.HttpResponse("No files uploaded", status_code=400)
 
-        if not user_id or not index_name or not documents:
-            return func.HttpResponse(
-                json.dumps({"error": "user_id, index_name, and documents are required"}),
-                status_code=400,
-                mimetype="application/json"
-            )
-        
-        AISearch.addDocuments(index_name= index_name, documents=documents, vector_fields=vector_fields)
-        
+        processed_files = AISearch.scanDocuments(files)
+        AISearch.addDocuments(index_name, processed_files, ["content"])
+
         return func.HttpResponse(
             status_code=200,
             mimetype="application/json"
         )
-        
+
     except Exception as e:
-        logging.exception("Error in AddDocument HTTP trigger")
-        return func.HttpResponse(
-            json.dumps({"error": str(e)}),
-            status_code=500,
-            mimetype="application/json"
-        )
+        logging.error(f"Error processing upload: {e}")
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
     
 #
 #########   delete document from an index #################
@@ -428,37 +469,3 @@ def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-
-
-
-# @app.function_name(name="ProcessDocuments")
-# @app.route(route="http_ai_search_process_documents", methods=["POST"])
-# def httpAISearchProcessDocuments(req: func.HttpRequest) -> func.HttpResponse:
-#     #This function receives files, processes them with document intelligence and adds them to the index
-#     try:
-#         # Get all uploaded files
-#         files = req.files
-#         if not files:
-#             return func.HttpResponse("No files uploaded", status_code=400)
-
-#         processed_files = []
-#         for filename in files:
-#             uploaded_file = files[filename]  # type: werkzeug.datastructures.FileStorage
-#             content = uploaded_file.read()
-            
-#             # Here you would feed the file into your document intelligence model
-#             # For example: result = process_document(content)
-#             processed_files.append({
-#                 "filename": uploaded_file.filename,
-#                 "size": len(content)
-#             })
-
-#         return func.HttpResponse(
-#             f"Successfully received {len(processed_files)} files: {processed_files}",
-#             status_code=200
-#         )
-
-#     except Exception as e:
-#         logging.error(f"Error processing upload: {e}")
-#         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
-    
