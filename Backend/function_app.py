@@ -6,11 +6,48 @@ import os
 
 import Chatbot
 import AISearch
-
+import Database
 
 TEST_USER_ID = "16b8fef2-4058-4654-bbba-6bffe2058d28"
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+############
+## User APIs
+###########
+#
+#########   Checks if the user is an admin #################
+#
+@app.function_name(name="IsUserAdmin")
+@app.route(route="http_user_is_admin", methods=["GET"])
+def httpUserIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        # Parse request body
+        user_id = req.params.get("user_id")
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        is_admin = Database.isAdmin(user_id)
+        return func.HttpResponse(
+            json.dumps({"isAdmin": is_admin}),
+            status_code=200,
+            mimetype="application/json"
+        )   
+        
+    except Exception as e:
+        logging.exception("Error in ListSearchIndexes HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+
 
 ############
 ## Chatbot APIs
@@ -26,7 +63,7 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id") 
         session_id = req_body.get("session_id")
 
         if not session_id or not user_id:
@@ -65,7 +102,7 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id")  
         session_id = req_body.get("session_id")
 
         if not session_id or not user_id:
@@ -101,7 +138,7 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id") 
         session_id = req_body.get("session_id")
 
         if not session_id or not user_id:
@@ -189,11 +226,18 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
-        user_id = req.params.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req.params.get("user_id")
 
         if not user_id:
             return func.HttpResponse(
                 json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -223,12 +267,19 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
-        user_id = req.params.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req.params.get("user_id")
         index_name = req.params.get("index_name")
 
         if not user_id or not index_name:
             return func.HttpResponse(
                 json.dumps({"error": "user_id and index_name are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -257,12 +308,19 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 def httpAISearchGetKeyField(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
-        user_id = req.params.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req.params.get("user_id")
         index_name = req.params.get("index_name")
 
         if not user_id or not index_name:
             return func.HttpResponse(
                 json.dumps({"error": "user_id and index_name are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -294,13 +352,20 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id")
         index_name = req_body.get("index_name")
 
 
         if not user_id or not index_name:
             return func.HttpResponse(
                 json.dumps({"error": "user_id, index_name, and index_fields are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -383,8 +448,20 @@ def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
         # Get all uploaded files
         files = req.files
         index_name = req.form.get("index_name")
+        user_id = req.form.get("user_id")
+
+        if not user_id or not index_name:
+            return func.HttpResponse("User ID and Index Name are missing", status_code=400)
+        
         if not files:
             return func.HttpResponse("No files uploaded", status_code=400)
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
 
         processed_files = AISearch.scanDocuments(files)
         AISearch.addDocuments(index_name, processed_files, ["content"])
@@ -408,13 +485,20 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id")
         index_name = req_body.get("index_name")
         doc_id = req_body.get("doc_id")
 
         if not user_id or not index_name or not doc_id:
             return func.HttpResponse(
                 json.dumps({"error": "user_id, index_name, and doc_id are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -444,12 +528,19 @@ def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         req_body = req.get_json()
-        user_id = req_body.get("user_id", TEST_USER_ID)  ##### Default value needs to be removed in production
+        user_id = req_body.get("user_id")
         index_name = req_body.get("index_name")
 
         if not user_id or not index_name:
             return func.HttpResponse(
                 json.dumps({"error": "user_id and index_name are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
