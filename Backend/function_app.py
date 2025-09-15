@@ -46,7 +46,43 @@ def httpUserIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json"
         )
-    
+
+@app.function_name(name="Login")
+@app.route(route="http_user_login", methods=["POST"])
+def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        req_body = req.get_json()
+    except ValueError:
+        return func.HttpResponse(
+            "Invalid JSON body",
+            status_code=400
+        )
+
+    username = req_body.get("username")
+    password = req_body.get("password")
+
+    if not username or not password:
+        return func.HttpResponse(
+            json.dumps({"error": "username and password are required"}),
+            status_code=400,
+            mimetype="application/json"
+        )
+
+    user = Database.login(username, password)
+
+    if user:
+        return func.HttpResponse(
+            json.dumps({"userId": user["userId"], "userType": user["user_type"]}),
+            status_code=200,
+            mimetype="application/json"
+        )
+    else:
+        return func.HttpResponse(
+            json.dumps({"error": "Invalid username or password"}),
+            status_code=401,
+            mimetype="application/json"
+        )
 
 
 ############

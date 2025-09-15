@@ -24,7 +24,9 @@ def initializeContainer():
     container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME)
     return container
     
-
+##################
+## User Management Functions
+###############
 
 def addUser(first_name, last_name, username, password, user_type="user"):
     # user_type = user || admin
@@ -59,6 +61,40 @@ def userIsValid(user_id):
         return item.get("documentType") == "user"
     except CosmosResourceNotFoundError:
         return False
+
+def login(username, password):
+    """
+    Attempt to log in a user by username and password.
+    Returns a dictionary with userId and user_type if found, otherwise None.
+    """
+    container = initializeContainer()
+
+    query = """
+        SELECT c.userId, c.user_type
+        FROM c
+        WHERE c.documentType="user" AND c.username=@username AND c.password=@password
+        """
+
+    parameters = [
+        {"name": "@username", "value": username},
+        {"name": "@password", "value": password}
+    ]
+
+    results = list(container.query_items(
+        query=query,
+        parameters=parameters,
+        enable_cross_partition_query=True
+    ))
+
+    if results:
+        # Return the first match (there should only be one)
+        return {"userId": results[0]["userId"], "user_type": results[0]["user_type"]}
+
+    return None
+
+##################
+## Chatbot Functions
+################
     
 def addMessage(user_id, session_id, role, content):
     if not userIsValid(user_id):
@@ -186,4 +222,6 @@ def clearSession(user_id, session_id):
     
     for message in messages:
         container.delete_item(item=message['id'], partition_key=user_id)
+
+
 

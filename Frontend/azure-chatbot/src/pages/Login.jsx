@@ -12,26 +12,39 @@ export default function Login() {
     const navigate = useNavigate();
 
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = async (e) => {
+        e.preventDefault();  
         setLoading(true);
-        setError(null);
+        setError(null);      
 
-        // try {
-        // Replace this URL with your real login API
-        // const response = await axios.post("/api/login", { username, password });
-        // const user = response.data; 
-        // onLogin(user); // Pass user info to parent/context
-        // } catch (err) {
-        // setError("Invalid username or password");
-        // } finally {
-        // setLoading(false);
-        //  }
-        
-        //login("c8183593-2547-4289-a752-f3f5e8fb797a", "user");
-        login("9c1cd525-31a0-433f-b720-98bfbf12dc1d", "admin");
-        navigate("/chatbot");
-    }
+        try {
+            const response = await axios.post(
+                "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_user_login?",
+                { username: username.trim(), password: password.trim() }
+            );
+
+            const userData = response.data;
+
+
+            login(userData.userId, userData.userType);  
+            navigate("/chatbot");
+
+        } catch (err) {
+            if (err.response) {
+                if (err.response.status === 401) {
+                    alert("Invalid username or password");
+                } else {
+                    setError(err.response.data.error || "Login failed");
+                }
+            } else {
+                setError("Network error. Please try again.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    
 
     return (
         <div className="flex justify-center items-center min-h-screen bg-bg-primary">
