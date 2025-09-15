@@ -6,7 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import 'primeicons/primeicons.css';
 
 export default function KnowledgeBaseManager() {
-    const { userId, setUserId } = useUser();
+    const { user } = useUser();
     const [indexList, setIndexList] = useState([]);
     const [newIndexName, setNewIndexName] = useState("");
     const [isCreatingNewIndex, setIsCreatingNewIndex] = useState(false);
@@ -18,7 +18,7 @@ export default function KnowledgeBaseManager() {
 
         try {
             const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_create_index?', {
-                "user_id": userId,
+                "user_id": user.id,
                 "index_name": newIndexName,
             });
     
@@ -43,7 +43,7 @@ export default function KnowledgeBaseManager() {
             const response = await axios.get(
             "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_list_indexes?",
             {
-                params: { user_id: userId }, 
+                params: { user_id: user.id }, 
             }
             );
 
@@ -58,7 +58,7 @@ export default function KnowledgeBaseManager() {
 
         try {
             const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_index?', {
-                "user_id": userId,
+                "user_id": user.id,
                 "index_name": indexList[idx],
                 });
             
@@ -70,7 +70,7 @@ export default function KnowledgeBaseManager() {
 
 
     const handleAddDocs = (idx) => {
-        navigate("/edit-docs", {state: {index_name: indexList[idx]}});
+        navigate("/admin/edit-docs", {state: {index_name: indexList[idx]}});
     }
     
     useEffect(() => {

@@ -7,11 +7,11 @@ import axios from "axios";
 export default function EditDocuments() {
     const location = useLocation();
     const index_name = location.state?.index_name;
-    const { userId, setUserId } = useUser();
+    const { user } = useUser();
     const [documentsList, setDocumentsList] = useState([]);
 
     if (!index_name) {
-        return <Navigate to="/knowledge-management" replace />;
+        return <Navigate to="admin/knowledge-management" replace />;
     }
 
     useEffect(() => {
@@ -24,7 +24,7 @@ export default function EditDocuments() {
             const response = await axios.get(
             "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_list_documents?",
             {
-                params: { user_id: userId, index_name: index_name }, 
+                params: { user_id: user.id, index_name: index_name }, 
             }
             );
 
@@ -36,7 +36,7 @@ export default function EditDocuments() {
         }
     }
     
-        const handleDeleteDocument = async () =>
+    const handleDeleteDocument = async () =>
     {
         
     }
@@ -47,7 +47,7 @@ export default function EditDocuments() {
 
         const formData = new FormData();
         formData.append("index_name", index_name);
-        formData.append("user_id", userId);
+        formData.append("user_id", user.id);
         // append all selected files with unique keys
         event.files.forEach((file, idx) => {
             formData.append(`file${idx}`, file);
@@ -77,6 +77,10 @@ export default function EditDocuments() {
             <h1>Document Management</h1>
             <div className="flex flex-row w-screen mt-10">
                 <div className="flex w-1/2 flex-col gap-2">
+                    {documentsList.length == 0 &&
+                    <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
+                        No Documents Added Yet
+                    </div>}
                     {documentsList.map((item, idx) => (
                     <div
                         key={idx}

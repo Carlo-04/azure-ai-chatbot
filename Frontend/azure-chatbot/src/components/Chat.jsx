@@ -10,13 +10,13 @@ import 'primeicons/primeicons.css';
 export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const { userId, setUserId } = useUser();
+  const { user } = useUser();
 
   const session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
 
 
   useEffect(() => {
-    
+    console.log(user.id);
     handleGetMessages();
   }, []); 
 
@@ -27,7 +27,7 @@ export default function Chat() {
   const handleGetMessages = async () => {
 
     const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages?', {
-      "user_id": userId,
+      "user_id": user.id,
       "session_id": session_id,
     });
     
@@ -38,7 +38,7 @@ export default function Chat() {
   const handleClearMessages = async () => {
     
     const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat?', {
-      "user_id": user_id,
+      "user_id": user.id,
       "session_id": session_id,
     });
     
@@ -57,7 +57,7 @@ export default function Chat() {
     try { //API call
 
       const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_message?', {
-        "user_id": user_id,
+        "user_id": user.id,
         "session_id": session_id,
         "query": input,
         "rag": true
@@ -73,7 +73,7 @@ export default function Chat() {
   }
 
   return (
-    <div className='max-w-1/2 m-auto'>
+    <div className='max-w-3/4 m-auto'>
       <div className="
         border border-gray-300      
         rounded-2xl             

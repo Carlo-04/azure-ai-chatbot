@@ -1,22 +1,36 @@
-// contexts/UserContext.jsx
-import { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
+// Create the context
 const UserContext = createContext();
 
-export function UserProvider({ children }) {
-  const [userId, setUserId] = useState("16b8fef2-4058-4654-bbba-6bffe2058d28"); //To be removed once the user management features are implemented
+// Create the provider component
+export const UserProvider = ({ children }) => {
+
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem("user");
+    return storedUser ? JSON.parse(storedUser) : { id: null, type: null };
+  });
+
+
+  const login = (id, type) => {
+    const newUser = { id, type };
+    setUser(newUser);
+    localStorage.setItem("user", JSON.stringify(newUser));
+  };
+
+
+  const logout = () => {
+    setUser({ id: null, type: null });
+    localStorage.removeItem("user");
+  };
+
 
   return (
-    <UserContext.Provider value={{ userId, setUserId }}>
+    <UserContext.Provider value={{ user, login, logout }}>
       {children}
     </UserContext.Provider>
   );
-}
+};
 
-export function useUser() {
-  const context = useContext(UserContext);
-  if (!context) {
-    throw new Error("useUser must be used within a UserProvider");
-  }
-  return context;
-}
+// Custom hook for easy access
+export const useUser = () => useContext(UserContext);
