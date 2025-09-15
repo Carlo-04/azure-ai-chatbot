@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
-import 'primeicons/primeicons.css';
+import "primeicons/primeicons.css";
 
-export default function SpeechInput({onSetInput}) {
+export default function SpeechInput({ onSetInput }) {
   const [recording, setRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [transcript, setTranscript] = useState("");
@@ -30,12 +30,20 @@ export default function SpeechInput({onSetInput}) {
         setLoading(true);
         const audio_blob = new Blob(chunks, { type: mimeType });
         const form_data = new FormData();
-        form_data.append("file", audio_blob, `recording.${mimeType.split("/")[1]}`);
+        form_data.append(
+          "file",
+          audio_blob,
+          `recording.${mimeType.split("/")[1]}`
+        );
 
         try {
-          const res = await axios.post("https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_speech_to_text?", form_data, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
+          const res = await axios.post(
+            "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_speech_to_text?",
+            form_data,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            }
+          );
           onSetInput(res.data);
         } catch (err) {
           console.error("Error sending audio:", err);
@@ -62,15 +70,14 @@ export default function SpeechInput({onSetInput}) {
 
   return (
     <div>
-        <button
+      <button
         onClick={recording ? stopRecording : startRecording}
         className={`
               flex items-center justify-center h-1/1 w-3 rounded-full
-              ${recording ? 'bg-red-400' :'bg-bg-secondary'}
-          `}
-        >
-            <i className="pi pi-microphone"></i>
-        </button>
+              ${recording ? "bg-red-400" : "bg-bg-secondary"}
+          `}>
+        <i className="pi pi-microphone"></i>
+      </button>
     </div>
   );
 }
