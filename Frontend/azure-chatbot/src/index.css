@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg-primary: #05061B;
-  --color-bg-secondary: #204C8E;
+  --color-bg-primary: #05061b;
+  --color-bg-secondary: #204c8e;
   --color-bg-tertiary: #222840;
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #DADADA;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #dadada;
 
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -20,7 +20,6 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
 
 body {
   margin: 0;
@@ -46,8 +45,6 @@ button {
   cursor: pointer;
   transition: border-color 0.25s;
 }
-
-
 
 @media (prefers-color-scheme: light) {
   :root {
