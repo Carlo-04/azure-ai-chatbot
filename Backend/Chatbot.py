@@ -46,6 +46,22 @@ DEFAULT_CHATBOT_PROMPT = """
     You may only generate responses in English.
     """
 
+def initializeClients(user_id):
+   
+    openai_client = AzureOpenAI(
+        api_version=AZURE_OPENAI_API_VERSION,
+        azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT,
+        api_key=AZURE_OPENAI_API_KEY,
+    )
+
+    search_client = SearchClient(
+        endpoint=AZURE_SEARCH_ENDPOINT,
+        index_name=AZURE_SEARCH_INDEX_NAME,
+        credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
+    )
+
+    return openai_client, search_client
+
 def num_tokens_from_messages(messages):
     encoding = tiktoken.encoding_for_model(AZURE_OPENAI_MODEL_NAME)
     num_tokens = 0
@@ -164,23 +180,6 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     
     return messages
 
-def initializeClients(user_id):
-   
-    openai_client = AzureOpenAI(
-        api_version=AZURE_OPENAI_API_VERSION,
-        azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT,
-        api_key=AZURE_OPENAI_API_KEY,
-    )
-
-    search_client = SearchClient(
-        endpoint=AZURE_SEARCH_ENDPOINT,
-        index_name=AZURE_SEARCH_INDEX_NAME,
-        credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
-    )
-
-    return openai_client, search_client
-
-
 def sendMessageHelper(user_id, session_id, query, rag):
     
     try:
@@ -211,19 +210,24 @@ def sendMessageHelper(user_id, session_id, query, rag):
         openai_client.close()
 
 def listMessages(user_id, session_id):
-    try:
-        openai_client, search_client = initializeClients(user_id)
-        messages = Database.getMessages(user_id=user_id, session_id=session_id)
+        return Database.getMessages(user_id=user_id, session_id=session_id)
 
-        # if(len(messages)==0):
-        #     messages = [
-        #         {
-        #             "role": "system",
-        #             "content": DEFAULT_CHATBOT_PROMPT
-        #         }
-        #     ]
-        #     messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False)
-        return messages
+def createSession(user_id, session_name):
+    try:
+        new_session_id = Database.addSession(user_id, session_name)
+        openai_client, search_client = initializeClients(user_id)
+
+        messages = [
+                    {
+                        "role": "system",
+                        "content": DEFAULT_CHATBOT_PROMPT
+                    }
+                ]
+        messages = sendMessage(user_id, openai_client, search_client, new_session_id, messages, False)
+        return new_session_id
+    except:
+        return None
+
     finally:
         openai_client.close()
 

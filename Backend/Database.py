@@ -129,7 +129,7 @@ def addSession(user_id, session_title):
     return session_id
 
 def getSessions(user_id):
-    #returns a list of tuples/sessions (sessionTitle, sessionId) for the signed-in user
+    # returns a list of dictionaries [{"session_id": ..., "session_title": ...}]
 
     if not userIsValid(user_id):
         raise ValueError("This user does not exist")
@@ -144,9 +144,16 @@ def getSessions(user_id):
     container = initializeContainer()    
     sessions = list(container.query_items(
         query=query,
-        partition_key=user_id  #since the partition key is userId, the query will only search within the user's documents
-        ))
-    return sessions
+        partition_key=user_id  
+    ))
+
+    formatted_sessions = [
+        {"session_id": s["id"], "session_title": s["sessionTitle"]}
+        for s in sessions
+    ]
+    
+    return formatted_sessions
+
 
 def getMessages(user_id, session_id):
     #returns a list of tuples/messages (role, content) for a given session_id

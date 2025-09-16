@@ -129,6 +129,81 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         )
     
 #
+#########   Getting the List of Sessions #################
+#
+@app.function_name(name="GetSessions")
+@app.route(route="http_chatbot_get_sessions", methods=["GET"])
+def httpChatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        user_id = req.params.get("user_id")  
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        sessions = Database.getSessions(user_id)
+
+        #{"session_id": ..., "session_title": ...}
+        return func.HttpResponse(
+            json.dumps({"sessions": sessions}),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in sendMessage HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+    #
+#########   Creating a Session #################
+#
+@app.function_name(name="CreateSession")
+@app.route(route="http_chatbot_create_session", methods=["POST"])
+def httpChatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        req_body = req.get_json()
+        user_id = req_body.get("user_id")  
+        session_title = req_body.get("session_title") 
+
+        if not user_id or not session_title:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id and a session_name are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        session_id = Chatbot.createSession(user_id, session_title)
+        if(session_id):
+            return func.HttpResponse(
+                json.dumps({"session_id": session_id, "session_title": session_title}),
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                json.dumps({"error": "Failed to create session"}),
+                status_code=501,
+                mimetype="application/json"
+            )
+        
+    except Exception as e:
+        logging.exception("Error in sendMessage HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
 #########   Getting the List of Messages #################
 #
 @app.function_name(name="GetMessagesTrigger")
@@ -250,7 +325,7 @@ def textToSpeech(req: func.HttpRequest) -> func.HttpResponse:
 
 
 #################
-# AI Search APIs        Need to implement checking for admin user
+# AI Search APIs       
 ###############
 
 #
