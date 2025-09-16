@@ -155,14 +155,14 @@ def httpChatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
         )
         
     except Exception as e:
-        logging.exception("Error in sendMessage HTTP trigger")
+        logging.exception("Error in getting the sessions")
         return func.HttpResponse(
             json.dumps({"error": str(e)}),
             status_code=500,
             mimetype="application/json"
         )
     
-    #
+#
 #########   Creating a Session #################
 #
 @app.function_name(name="CreateSession")
@@ -182,21 +182,50 @@ def httpChatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
             )
         
         session_id = Chatbot.createSession(user_id, session_title)
-        if(session_id):
+     
+        return func.HttpResponse(
+            json.dumps({"session_id": session_id, "session_title": session_title}),
+            status_code=200,
+            mimetype="application/json"
+        )
+
+        
+    except Exception as e:
+        logging.exception("Error in creating a session")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########   Deleting a Session #################
+#
+@app.function_name(name="DeleteSession")
+@app.route(route="http_chatbot_delete_session", methods=["POST"])
+def httpChatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        req_body = req.get_json()
+        user_id = req_body.get("user_id")  
+        session_id = req_body.get("session_id") 
+
+        if not user_id or not session_id:
             return func.HttpResponse(
-                json.dumps({"session_id": session_id, "session_title": session_title}),
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                json.dumps({"error": "Failed to create session"}),
-                status_code=501,
+                json.dumps({"error": "user_id and a session_id are required"}),
+                status_code=400,
                 mimetype="application/json"
             )
         
+        Database.deleteSession(user_id, session_id)
+
+        return func.HttpResponse(
+            status_code=200,
+            mimetype="application/json"
+        )
+        
     except Exception as e:
-        logging.exception("Error in sendMessage HTTP trigger")
+        logging.exception("Error in deleting the session")
         return func.HttpResponse(
             json.dumps({"error": str(e)}),
             status_code=500,

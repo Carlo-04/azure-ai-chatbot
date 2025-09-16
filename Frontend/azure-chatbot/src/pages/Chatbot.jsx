@@ -1,5 +1,6 @@
 import { useState, useEffect, use } from "react";
 import axios from "axios";
+import "primeicons/primeicons.css";
 
 import { useUser } from "../contexts/UserContext";
 import Chat from "../components/Chat";
@@ -59,6 +60,30 @@ export default function Chatbot() {
       );
     }
   };
+
+  const handleDeleteSession = async (target_session_id) => {
+    try {
+      const response = await axios.post(
+        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_delete_session?",
+        {
+          user_id: user.id,
+          session_id: target_session_id,
+        }
+      );
+
+      setSessionsList((prevList) =>
+        prevList.filter((session) => session.session_id !== target_session_id)
+      );
+      if (currentSessionId == target_session_id) {
+        setCurrentSessionId("");
+      }
+    } catch (error) {
+      console.error(
+        "Error deleting session:",
+        error.response?.data || error.message
+      );
+    }
+  };
   return (
     <div className="flex flex-row justify-start items-center fixed inset-0">
       {/* Side bar */}
@@ -100,15 +125,35 @@ export default function Chatbot() {
           )}
         </div>
         {/* Sessions List */}
-        {sessionsList.length > 1 && (
+        {sessionsList.length > 0 && (
           <div className="flex flex-10 flex-col justify-start items-center text-text-secondary">
             {sessionsList.length > 0 &&
-              sessionsList.map((item, idx) => (
+              sessionsList.map((session, idx) => (
                 <div
                   key={idx}
-                  className="w-full flex items-center justify-between bg-inherit hover:bg-bg-secondary cursor-pointer rounded-md shadow p-3"
-                  onClick={() => setCurrentSessionId(item.session_id)}>
-                  {item.session_title}
+                  className={`
+                    w-full flex items-center justify-between hover:bg-bg-secondary  rounded-md shadow p-3
+                    ${
+                      session.session_id === currentSessionId
+                        ? "bg-bg-secondary"
+                        : "bg-inherit"
+                    }
+                    `}>
+                  <div
+                    className="cursor-pointer hover:font-semibold"
+                    onClick={() => setCurrentSessionId(session.session_id)}>
+                    {session.session_title}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteSession(session.session_id)}
+                    className="flex 
+                        items-center 
+                        justify-center 
+                        h-1/1 w-3 
+                        rounded-full 
+                        bg-bg-primary">
+                    <i className="pi pi-trash"></i>
+                  </button>
                 </div>
               ))}
           </div>
@@ -123,7 +168,7 @@ export default function Chatbot() {
 
       {/* current chat */}
       {currentSessionId != "" && (
-        <div className="flex w-full px-10 items-center justify-center">
+        <div className="flex w-8/10 px-10 items-center justify-center overflow-auto">
           <div className="w-2/3">
             <Chat session_id={currentSessionId} />
           </div>
