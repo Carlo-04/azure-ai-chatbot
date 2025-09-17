@@ -404,6 +404,7 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 @app.function_name(name="ListDocuments")
 @app.route(route="http_ai_search_list_documents", methods=["GET"])
 def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
+    #returns a dic with every retreivable field per doc
 
     try:
         # Parse request body
@@ -627,11 +628,11 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
         req_body = req.get_json()
         user_id = req_body.get("user_id")
         index_name = req_body.get("index_name")
-        doc_id = req_body.get("doc_id")
+        file_name = req_body.get("file_name")
 
-        if not user_id or not index_name or not doc_id:
+        if not user_id or not index_name or not file_name:
             return func.HttpResponse(
-                json.dumps({"error": "user_id, index_name, and doc_id are required"}),
+                json.dumps({"error": "user_id, index_name, and file_name are required"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -643,7 +644,7 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        AISearch.deleteDocument(index_name= index_name, doc_id=doc_id)
+        AISearch.deleteDocument(index_name= index_name, file_name=file_name)
         
         return func.HttpResponse(
             status_code=200,
