@@ -168,8 +168,8 @@ export default function Chatbot() {
 
       {/* current chat */}
       {currentSessionId != "" && (
-        <div className="flex w-8/10 px-10 items-center justify-center overflow-auto">
-          <div className="w-2/3">
+        <div className="flex flex-1 w-8/10 h-full p-10 items-start justify-center overflow-auto">
+          <div className="flex w-2/3 justify-start items-center">
             <Chat session_id={currentSessionId} />
           </div>
         </div>

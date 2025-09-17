@@ -86,7 +86,7 @@ export default function Chat({ session_id }) {
   };
 
   return (
-    <div className="m-auto">
+    <div>
       <div
         className="
         border border-gray-300      
@@ -94,7 +94,6 @@ export default function Chat({ session_id }) {
         p-2.5                     
         min-h-75         
         h-3/4               
-        overflow-y-auto         
         bg-bg-tertiary         
         flex flex-col             
       ">
