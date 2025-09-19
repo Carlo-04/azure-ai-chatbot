@@ -1,165 +1,182 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from "react";
+import axios from "axios";
 import ReactMarkdown from "react-markdown";
-import SpeechInput from './SpeechToText';
-import TextToSpeech from './TextToSpeech';
-import 'primeicons/primeicons.css';
+import SpeechInput from "./SpeechToText";
+import TextToSpeech from "./TextToSpeech";
+import { useUser } from "../contexts/UserContext";
+import "primeicons/primeicons.css";
 
-
-export default function Chat() {
+export default function Chat({ session_id }) {
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const user_id = "16b8fef2-4058-4654-bbba-6bffe2058d28";
-  const session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
+  const [input, setInput] = useState("");
+  const { user } = useUser();
 
+  //session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
 
   useEffect(() => {
-    
+    if (!session_id) return;
+
     handleGetMessages();
-  }, []); 
+  }, [session_id]);
 
   const handleSetInput = (text) => {
-    setInput(prevInput => prevInput + " " + text);
-  }
-    
-  const handleGetMessages = async () => {
+    setInput((prevInput) => prevInput + " " + text);
+  };
 
-    const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages?', {
-      "user_id": user_id,
-      "session_id": session_id,
-    });
-    
+  const handleGetMessages = async () => {
+    const response = await axios.post(
+      "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages?",
+      {
+        user_id: user.id,
+        session_id: session_id,
+      }
+    );
+
     const messages_list = response.data.messages;
     setMessages(messages_list.slice(1));
-  }
+  };
 
   const handleClearMessages = async () => {
-    
-    const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat?', {
-      "user_id": user_id,
-      "session_id": session_id,
-    });
-    
+    const response = await axios.post(
+      "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat?",
+      {
+        user_id: user.id,
+        session_id: session_id,
+      }
+    );
+
     const messages_list = response.data.messages;
     setMessages(messages_list.slice(1));
-  }
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
 
     // Add user message immediately
-    setMessages(prev => [...prev, { 'role': 'user', 'content': input }]);
+    setMessages((prev) => [...prev, { role: "user", content: input }]);
     const userMessage = input;
-    setInput('');
+    setInput("");
 
-    try { //API call
+    try {
+      //API call
 
-      const response = await axios.post('https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_message?', {
-        "user_id": user_id,
-        "session_id": session_id,
-        "query": input,
-        "rag": true
-      });
-      
+      const response = await axios.post(
+        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_message?",
+        {
+          user_id: user.id,
+          session_id: session_id,
+          query: input,
+          rag: true,
+        }
+      );
+
       console.log(response);
       // Add bot response
-      setMessages(prev => [...prev, { 'role': 'bot', 'content': response.data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", content: response.data.reply },
+      ]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { 'role': 'bot', 'content': '⚠️ Error: could not get response' }]); 
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", content: "⚠️ Error: could not get response" },
+      ]);
     }
-  }
+  };
 
   return (
-    <div className='max-w-1/2 m-auto'>
-      <div className="
+    <div>
+      <div
+        className="
         border border-gray-300      
         rounded-2xl             
         p-2.5                     
         min-h-75         
         h-3/4               
-        overflow-y-auto         
         bg-bg-tertiary         
         flex flex-col             
       ">
-      {messages.map((msg, index) => (
-        <div 
-          key={index}
-          className={`flex items-center ${msg.role === "user" ? "justify-end" : "justify-start"} mb-2`}
-        >
+        {messages.map((msg, index) => (
           <div
             key={index}
-            className={`
+            className={`flex items-center ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            } mb-2`}>
+            <div
+              key={index}
+              className={`
               text-left
-              ${msg.role === "user" ? "self-end bg-bg-tertiary" : "self-start bg-bg-secondary"}
+              ${
+                msg.role === "user"
+                  ? "self-end bg-bg-tertiary"
+                  : "self-start bg-bg-secondary"
+              }
               max-w-3/4
               rounded-2xl
               px-3 py-2
               mb-2
               break-words
-            `}
-          >
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
-          </div>
-          
-            {msg.role === "assistant" &&
-              <div className='flex 
+            `}>
+              <ReactMarkdown>{msg.content}</ReactMarkdown>
+            </div>
+
+            {msg.role === "assistant" && (
+              <div
+                className="flex 
                 items-center 
                 justify-center 
                 h-10 w-10 
                 rounded-full
                 ml-2 
-                bg-bg-secondary'>
-                <TextToSpeech text={msg.content}/>
+                bg-bg-secondary">
+                <TextToSpeech text={msg.content} />
               </div>
-            }
-          
-        </div>
-      ))}
-    </div> 
-
+            )}
+          </div>
+        ))}
+      </div>
 
       <div>
         <div className="flex flex-row mt-10 gap-5 items-center">
           <input
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            className='flex flex-1 p-5 h-3 rounded-md border-1'
+            className="flex flex-1 p-5 h-3 rounded-md border-1"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && input != '') {
+              if (e.key === "Enter" && !e.shiftKey && input != "") {
                 e.preventDefault(); // prevent newline in the input
                 handleSend();
               }
             }}
           />
-          <div className='flex flex-row gap-2'>
-            <button 
-              onClick={handleClearMessages} 
-              className='flex 
+          <div className="flex flex-row gap-2">
+            <button
+              onClick={handleClearMessages}
+              className="flex 
                 items-center 
                 justify-center 
                 h-1/1 w-3 
                 rounded-full 
-                bg-bg-secondary'>
-              <i className='pi pi-times'></i>
+                bg-bg-secondary">
+              <i className="pi pi-times"></i>
             </button>
-            <SpeechInput onSetInput={handleSetInput}/>
-            <button 
-              onClick={handleSend} 
-              className='flex 
+            <SpeechInput onSetInput={handleSetInput} />
+            <button
+              onClick={handleSend}
+              className="flex 
                 items-center 
                 justify-center 
                 h-1/1 w-3 
                 rounded-full 
-                bg-bg-secondary'>
-              <i className='pi pi-send'></i>
+                bg-bg-secondary">
+              <i className="pi pi-send"></i>
             </button>
           </div>
         </div>
       </div>
     </div>
   );
-
 }
