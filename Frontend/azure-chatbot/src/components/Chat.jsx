@@ -6,17 +6,18 @@ import TextToSpeech from "./TextToSpeech";
 import { useUser } from "../contexts/UserContext";
 import "primeicons/primeicons.css";
 
-export default function Chat() {
+export default function Chat({ session_id }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const { user } = useUser();
 
-  const session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
+  //session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
 
   useEffect(() => {
-    console.log(user.id);
+    if (!session_id) return;
+
     handleGetMessages();
-  }, []);
+  }, [session_id]);
 
   const handleSetInput = (text) => {
     setInput((prevInput) => prevInput + " " + text);
@@ -85,7 +86,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="max-w-3/4 m-auto">
+    <div>
       <div
         className="
         border border-gray-300      
@@ -93,7 +94,6 @@ export default function Chat() {
         p-2.5                     
         min-h-75         
         h-3/4               
-        overflow-y-auto         
         bg-bg-tertiary         
         flex flex-col             
       ">

@@ -53,34 +53,35 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         req_body = req.get_json()
-    except ValueError:
-        return func.HttpResponse(
-            "Invalid JSON body",
-            status_code=400
-        )
+    
+        username = req_body.get("username")
+        password = req_body.get("password")
 
-    username = req_body.get("username")
-    password = req_body.get("password")
+        if not username or not password:
+            return func.HttpResponse(
+                json.dumps({"error": "username and password are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
 
-    if not username or not password:
-        return func.HttpResponse(
-            json.dumps({"error": "username and password are required"}),
-            status_code=400,
-            mimetype="application/json"
-        )
+        user = Database.login(username, password)
 
-    user = Database.login(username, password)
-
-    if user:
+        if user:
+            return func.HttpResponse(
+                json.dumps({"userId": user["userId"], "userType": user["user_type"]}),
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                json.dumps({"error": "Invalid username or password"}),
+                status_code=401,
+                mimetype="application/json"
+            )
+    except Exception as e:
         return func.HttpResponse(
-            json.dumps({"userId": user["userId"], "userType": user["user_type"]}),
-            status_code=200,
-            mimetype="application/json"
-        )
-    else:
-        return func.HttpResponse(
-            json.dumps({"error": "Invalid username or password"}),
-            status_code=401,
+            json.dumps({"error": str(e)}),
+            status_code=500,
             mimetype="application/json"
         )
 
@@ -122,6 +123,110 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         logging.exception("Error in sendMessage HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########   Getting the List of Sessions #################
+#
+@app.function_name(name="GetSessions")
+@app.route(route="http_chatbot_get_sessions", methods=["GET"])
+def httpChatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        user_id = req.params.get("user_id")  
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        sessions = Database.getSessions(user_id)
+
+        #{"session_id": ..., "session_title": ...}
+        return func.HttpResponse(
+            json.dumps({"sessions": sessions}),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in getting the sessions")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########   Creating a Session #################
+#
+@app.function_name(name="CreateSession")
+@app.route(route="http_chatbot_create_session", methods=["POST"])
+def httpChatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        req_body = req.get_json()
+        user_id = req_body.get("user_id")  
+        session_title = req_body.get("session_title") 
+
+        if not user_id or not session_title:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id and a session_name are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        session_id = Chatbot.createSession(user_id, session_title)
+     
+        return func.HttpResponse(
+            json.dumps({"session_id": session_id, "session_title": session_title}),
+            status_code=200,
+            mimetype="application/json"
+        )
+
+        
+    except Exception as e:
+        logging.exception("Error in creating a session")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########   Deleting a Session #################
+#
+@app.function_name(name="DeleteSession")
+@app.route(route="http_chatbot_delete_session", methods=["POST"])
+def httpChatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        req_body = req.get_json()
+        user_id = req_body.get("user_id")  
+        session_id = req_body.get("session_id") 
+
+        if not user_id or not session_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id and a session_id are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        Database.deleteSession(user_id, session_id)
+
+        return func.HttpResponse(
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in deleting the session")
         return func.HttpResponse(
             json.dumps({"error": str(e)}),
             status_code=500,
@@ -250,7 +355,7 @@ def textToSpeech(req: func.HttpRequest) -> func.HttpResponse:
 
 
 #################
-# AI Search APIs        Need to implement checking for admin user
+# AI Search APIs       
 ###############
 
 #
@@ -300,6 +405,7 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 @app.function_name(name="ListDocuments")
 @app.route(route="http_ai_search_list_documents", methods=["GET"])
 def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
+    #returns a dic with every retreivable field per doc
 
     try:
         # Parse request body
@@ -523,11 +629,11 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
         req_body = req.get_json()
         user_id = req_body.get("user_id")
         index_name = req_body.get("index_name")
-        doc_id = req_body.get("doc_id")
+        file_name = req_body.get("file_name")
 
-        if not user_id or not index_name or not doc_id:
+        if not user_id or not index_name or not file_name:
             return func.HttpResponse(
-                json.dumps({"error": "user_id, index_name, and doc_id are required"}),
+                json.dumps({"error": "user_id, index_name, and file_name are required"}),
                 status_code=400,
                 mimetype="application/json"
             )
@@ -539,7 +645,7 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        AISearch.deleteDocument(index_name= index_name, doc_id=doc_id)
+        AISearch.deleteDocument(index_name= index_name, file_name=file_name)
         
         return func.HttpResponse(
             status_code=200,

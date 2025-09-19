@@ -8,7 +8,7 @@ export default function EditDocuments() {
   const location = useLocation();
   const index_name = location.state?.index_name;
   const { user } = useUser();
-  const [documentsList, setDocumentsList] = useState([]);
+  const [documentsList, setDocumentsList] = useState([]); //list of document Names [<string>doc1, <string>doc2]
 
   if (!index_name) {
     return <Navigate to="admin/knowledge-management" replace />;
@@ -34,7 +34,30 @@ export default function EditDocuments() {
     }
   };
 
-  const handleDeleteDocument = async () => {};
+  const handleDeleteDocument = async (file_name) => {
+    try {
+      const response = await axios.post(
+        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_document?",
+        {
+          user_id: user.id,
+          index_name: index_name,
+          file_name: file_name,
+        }
+      );
+
+      if (response.status === 200) {
+        handleGetDocumentsList();
+      }
+    } catch (error) {
+      if (error.response) {
+        console.error("Error:", error.response.data);
+      } else {
+        // Network or other error
+        console.error("Request failed:", error.message);
+        alert("Request failed. Please try again.");
+      }
+    }
+  };
 
   const customUploader = async (event) => {
     if (!event.files || event.files.length === 0) return;
@@ -59,6 +82,7 @@ export default function EditDocuments() {
       }
 
       alert("Files uploaded successfully!");
+      handleGetDocumentsList();
     } catch (err) {
       console.error("Upload failed:", err);
       alert("Upload failed: " + err.message);
@@ -67,7 +91,7 @@ export default function EditDocuments() {
 
   return (
     <div>
-      <h1>Document Management</h1>
+      <h1>Search Index Name: {index_name}</h1>
       <div className="flex flex-row w-screen mt-10">
         <div className="flex w-1/2 flex-col gap-2">
           {documentsList.length == 0 && (
@@ -75,20 +99,20 @@ export default function EditDocuments() {
               No Documents Added Yet
             </div>
           )}
-          {documentsList.map((item, idx) => (
+          {documentsList.map((file_name, idx) => (
             <div
               key={idx}
               className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
               <a
                 href="google.com"
                 className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
-                {item}
+                {file_name}
               </a>
 
               <div className="flex gap-2">
                 <button
                   className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-primary"
-                  onClick={() => handleDeleteDocument(idx)}>
+                  onClick={() => handleDeleteDocument(file_name)}>
                   Delete
                 </button>
               </div>

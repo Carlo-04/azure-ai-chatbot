@@ -80,7 +80,7 @@ export default function KnowledgeBaseManager() {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col justify-start items-center">
+    <div className="flex flex-1 flex-col">
       <div>
         <h1>Knowledge Base Manager</h1>
       </div>

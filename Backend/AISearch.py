@@ -273,12 +273,29 @@ def getFields(index_name):
 ###################
 # Delete a Document in an Index
 #################
-def deleteDocument(index_name, doc_id):
+def deleteDocument(index_name, file_name):
+    """
+    deletes all the documents in the index with the same fileName field
+    """
     credential = AzureKeyCredential(AZURE_SEARCH_API_KEY)
     search_client = SearchClient(endpoint=AZURE_SEARCH_ENDPOINT, index_name=index_name, credential=credential)
 
-    doc_to_delete = [{getKeyField(index_name): doc_id}]
-    result = search_client.delete_documents(documents=doc_to_delete)
+    # Search for documents with the given filename
+    results = search_client.search(search_text="", filter=f"fileName eq '{file_name}'")
+
+    # Collect document keys
+    keys_to_delete = []
+    id_field = getKeyField(index_name)
+    for doc in results:
+        keys_to_delete.append({"@search.action": "delete", id_field: doc[id_field]})
+
+    if not keys_to_delete:
+        print(f"No documents found with fileName = {file_name}")
+        return
+
+    #deleting keys
+    search_client.upload_documents(documents=keys_to_delete)
+    print(f"Deleted {len(keys_to_delete)} documents with fileName = {file_name}")
 
 ###############
 # Delete Index
@@ -289,27 +306,6 @@ def deleteIndex(index_name):
 
     index_client.delete_index(index_name)     
 
-
-def fieldToValue(field):
-    """Recursively convert DocumentField to JSON-serializable Python values."""
-    if field is None:
-        return None
-
-    if isinstance(field, DocumentField):
-        if field.value_type == "list":
-            return [fieldToValue(item) for item in field.value]
-        elif field.value_type == "dictionary":
-            clean_dict = {k: fieldToValue(v) for k, v in field.value.items()}
-            # Special case: if it's just {"COLUMN1": "something"} → return the value directly
-            if list(clean_dict.keys()) == ["COLUMN1"]:
-                return clean_dict["COLUMN1"]
-            return clean_dict
-        elif field.value_type == "date":
-            return field.value.isoformat() if field.value else None
-        else:
-            return field.value
-    else:
-        return field
     
 #############
 # Process Document with Doc Intelligence

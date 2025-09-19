@@ -46,6 +46,22 @@ DEFAULT_CHATBOT_PROMPT = """
     You may only generate responses in English.
     """
 
+def initializeClients():
+   
+    openai_client = AzureOpenAI(
+        api_version=AZURE_OPENAI_API_VERSION,
+        azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT,
+        api_key=AZURE_OPENAI_API_KEY,
+    )
+
+    search_client = SearchClient(
+        endpoint=AZURE_SEARCH_ENDPOINT,
+        index_name=AZURE_SEARCH_INDEX_NAME,
+        credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
+    )
+
+    return openai_client, search_client
+
 def num_tokens_from_messages(messages):
     encoding = tiktoken.encoding_for_model(AZURE_OPENAI_MODEL_NAME)
     num_tokens = 0
@@ -59,9 +75,10 @@ def num_tokens_from_messages(messages):
 def ensureTokenLimit(openai_client, search_client, user_id, session_id, messages):
     #This function checks if the token limit is almost reached
     #If the limit is almost reached, it summarizes the conversation and creates a new messages list
-    #It returns the new/old messages list
+    #It returns the new/old messages list. If summarized, the message list is only returned with 
+    # the summary not the summarization prompt
     
-    if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.8:
+    if num_tokens_from_messages(messages) >= MAX_TOKENS* 0.8 and len(messages)>2:
 
         summary_prompt = "Summarize the conversation so far in a concise manner, retaining important details and context. " \
         "The summary should be brief and to the point, capturing the essence of the discussion without unnecessary elaboration. " \
@@ -72,7 +89,20 @@ def ensureTokenLimit(openai_client, search_client, user_id, session_id, messages
             "content": summary_prompt
         })
 
-        messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False) 
+        response = openai_client.chat.completions.create(
+            stream=False,
+            messages=messages,
+            max_tokens=MAX_TOKENS,
+            temperature=0.75,
+            model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
+        )
+        full_reply = response.choices[0].message.content
+        messages.pop() #removing the summary prompt
+        messages.append({
+            "role": "assistant",
+            "content": full_reply
+        }) 
+
 
         #last 5 messages + summary will be kept in history. 
         #The rest of the messages will be displayed but not stored within the context window
@@ -100,8 +130,14 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     query: {query}, sources:\n{sources}
     """ 
     query = messages[-1]['content']
+    latest_message = messages[-1]
 
-    if rag: #apply rag. typically used for user messages (except for summarization)
+    #applying sliding window + summarization to ensure the context window is met
+    messages.pop() #removing the query before in case messages needs to be summarized
+    messages = ensureTokenLimit(openai_client, search_client, user_id, session_id, messages)
+    messages.append(latest_message)
+
+    if rag: #apply rag. typically used for user messages (to be ignored for the first system prompt)
 
         #embedding the query
         embed_query = openai_client.embeddings.create(
@@ -164,85 +200,67 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     
     return messages
 
-def initializeClients(user_id):
-   
-    openai_client = AzureOpenAI(
-        api_version=AZURE_OPENAI_API_VERSION,
-        azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT,
-        api_key=AZURE_OPENAI_API_KEY,
-    )
-
-    search_client = SearchClient(
-        endpoint=AZURE_SEARCH_ENDPOINT,
-        index_name=AZURE_SEARCH_INDEX_NAME,
-        credential=AzureKeyCredential(AZURE_SEARCH_API_KEY)
-    )
-
-    return openai_client, search_client
-
-
 def sendMessageHelper(user_id, session_id, query, rag):
     
-    try:
-        openai_client, search_client = initializeClients(user_id)
-        messages = Database.getMessages(user_id=user_id, session_id=session_id)
+    openai_client, search_client = initializeClients()
+    messages = Database.getMessages(user_id=user_id, session_id=session_id)
 
-        messages.append({
-            "role": "user",
-            "content": query
-        })
+    messages.append({
+        "role": "user",
+        "content": query
+    })
 
-        # Call your existing function
-        updated_messages = sendMessage(
-            user_id=user_id,
-            openai_client=openai_client,
-            search_client=search_client,
-            session_id=session_id,
-            messages=messages,
-            rag=rag
-        )
-        
-        reply = updated_messages[-1]["content"]
-        ensureTokenLimit(openai_client, search_client, user_id, session_id, updated_messages)
-        
-        return reply
+    # Call your existing function
+    updated_messages = sendMessage(
+        user_id=user_id,
+        openai_client=openai_client,
+        search_client=search_client,
+        session_id=session_id,
+        messages=messages,
+        rag=rag
+    )
     
-    finally:
-        openai_client.close()
+    reply = updated_messages[-1]["content"]
+    openai_client.close()
+    return reply
+
 
 def listMessages(user_id, session_id):
-    try:
-        openai_client, search_client = initializeClients(user_id)
-        messages = Database.getMessages(user_id=user_id, session_id=session_id)
+        return Database.getMessages(user_id=user_id, session_id=session_id)
 
-        # if(len(messages)==0):
-        #     messages = [
-        #         {
-        #             "role": "system",
-        #             "content": DEFAULT_CHATBOT_PROMPT
-        #         }
-        #     ]
-        #     messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False)
-        return messages
-    finally:
-        openai_client.close()
+def createSession(user_id, session_name):
+
+    new_session_id = Database.addSession(user_id, session_name)
+    openai_client, search_client = initializeClients()
+
+    messages = [
+                {
+                    "role": "system",
+                    "content": DEFAULT_CHATBOT_PROMPT
+                }
+            ]
+    messages = sendMessage(user_id, openai_client, search_client, new_session_id, messages, False)
+    openai_client.close()
+    return new_session_id
+
 
 def clearChat(user_id, session_id):
-    try:
-        openai_client, search_client = initializeClients(user_id)
-        messages = Database.getMessages(user_id=user_id, session_id=session_id)
 
-        messages = [
-            {
-                "role": "system",
-                "content": DEFAULT_CHATBOT_PROMPT
-            }
-        ]
-        Database.clearSession(user_id=user_id, session_id=session_id)
-        messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False)
-        return messages
-    finally:
-        openai_client.close()
+    openai_client, search_client = initializeClients()
+    messages = Database.getMessages(user_id=user_id, session_id=session_id)
+
+    messages = [
+        {
+            "role": "system",
+            "content": DEFAULT_CHATBOT_PROMPT
+        }
+    ]
+    Database.clearSession(user_id=user_id, session_id=session_id)
+    messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False)
+    openai_client.close()
+    return messages
+
+        
 
 def transcribeAudio(file):
     """
