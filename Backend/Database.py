@@ -5,6 +5,7 @@ from azure.cosmos.exceptions import CosmosResourceNotFoundError
 import uuid
 from datetime import datetime, timezone
 import os
+import bcrypt
 
 
 
@@ -29,8 +30,37 @@ def initializeContainer():
 ###############
 
 def addUser(first_name, last_name, username, password, user_type="user"):
+    # returns the userId if created successfully. 
+    # Returns None if the username already exists
     # user_type = user || admin
+
+    container = initializeContainer()
+    query = """
+        SELECT c.userId
+        FROM c
+        WHERE c.username=@username 
+        """
+
+    parameters = [
+        {"name": "@username", "value": username}
+    ]
+
+    results = list(container.query_items(
+        query=query,
+        parameters=parameters,
+        enable_cross_partition_query=True
+    ))
+
+    if results:
+        #username already exists
+        return None
+    
     id = str(uuid.uuid4())
+
+    #hashing the password
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+    hashed_password = hashed_password.decode('utf-8')
     user = {
         "id": id,  # unique per user
         "userId": id,
@@ -39,10 +69,9 @@ def addUser(first_name, last_name, username, password, user_type="user"):
         "documentType": "user",
         "user_type": user_type,
         "username": username,
-        "password": password,
+        "password": hashed_password,
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
-    container = initializeContainer()
     container.create_item(body=user)
     return id
 
@@ -70,14 +99,13 @@ def login(username, password):
     container = initializeContainer()
 
     query = """
-        SELECT c.userId, c.user_type
+        SELECT c.userId, c.user_type, c.password
         FROM c
-        WHERE c.documentType="user" AND c.username=@username AND c.password=@password
+        WHERE c.documentType="user" AND c.username=@username
         """
 
     parameters = [
         {"name": "@username", "value": username},
-        {"name": "@password", "value": password}
     ]
 
     results = list(container.query_items(
@@ -86,7 +114,8 @@ def login(username, password):
         enable_cross_partition_query=True
     ))
 
-    if results:
+    #comparing the passwords
+    if results and bcrypt.checkpw(password.encode('utf-8'), results[0]["password"].encode('utf-8')):
         # Return the first match (there should only be one)
         return {"userId": results[0]["userId"], "user_type": results[0]["user_type"]}
 
