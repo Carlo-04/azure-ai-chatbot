@@ -541,6 +541,13 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
                 "key": True
             },
             {
+                "field_name": "chunk_index",
+                "field_type": "SimpleField",
+                "data_type": "Edm.Int32",
+                "sortable": True,
+                "filterable": True
+            },
+            {
                 "field_name": "chunk",
                 "field_type": "SearchableField",
                 "data_type": "Edm.String"
@@ -550,13 +557,13 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
                 "field_type": "SearchField"
             },
             {
-                "field_name": "fileName",
+                "field_name": "file_name",
                 "field_type": "SearchableField",
                 "data_type": "Edm.String",
                 "filterable": True
             },
             {
-                "field_name": "pageNumber",
+                "field_name": "page_number",
                 "field_type": "SimpleField",
                 "data_type": "Edm.Int32",
                 "filterable": True,

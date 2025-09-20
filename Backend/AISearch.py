@@ -232,12 +232,14 @@ def addDocuments(index_name, documents, vector_fields=[], chunk_size=100):
             for i, chunk in enumerate(chunks):
                 doc_chunk = {
                     "chunk_id": f"{doc_id}_{field}_{i}",   
-                    "parent_id": doc_id,             
+                    "parent_id": doc_id,            
+                    "chunk_index": str(i), 
                     "chunk": chunk,
                     f"{field}_vector": vectorizeString(chunk)
                 }
+                doc_chunk["id"] = f"{doc_id}-{i}"
                 for k, v in doc.items():
-                    if k not in vector_fields:
+                    if k not in vector_fields and k != "id":
                         doc_chunk[k] = v
                 docs_to_upload.append(doc_chunk)
     
@@ -281,7 +283,7 @@ def deleteDocument(index_name, file_name):
     search_client = SearchClient(endpoint=AZURE_SEARCH_ENDPOINT, index_name=index_name, credential=credential)
 
     # Search for documents with the given filename
-    results = search_client.search(search_text="", filter=f"fileName eq '{file_name}'")
+    results = search_client.search(search_text="", filter=f"file_name eq '{file_name}'")
 
     # Collect document keys
     keys_to_delete = []
@@ -290,7 +292,7 @@ def deleteDocument(index_name, file_name):
         keys_to_delete.append({"@search.action": "delete", id_field: doc[id_field]})
 
     if not keys_to_delete:
-        print(f"No documents found with fileName = {file_name}")
+        print(f"No documents found with file_name = {file_name}")
         return
 
     #deleting keys
@@ -340,8 +342,8 @@ def scanDocuments(files):
 
             parsed_result = {
                 "id": f"{document_id}-page{page_num}",  
-                "fileName": uploaded_file.filename,
-                "pageNumber": page_num,
+                "file_name": uploaded_file.filename,
+                "page_number": page_num,
                 "content": page_text, 
             }
 

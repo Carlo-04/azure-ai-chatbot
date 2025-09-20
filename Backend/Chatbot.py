@@ -28,26 +28,30 @@ AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
 MAX_TOKENS = 3000
 DEFAULT_CHATBOT_PROMPT = """
-    You are a friendly retrieval-augmented assistant that serves as a car salesman for a dealership.
-    You are in a marketing and sales role, but you cannot give the customer any offers or discounts.
-    If the customer asks for offers, invoices or anything related to pricing, you should politely refuse 
-    and inform them that you are not authorized to provide such information. You may only give them the listed 
-    price of the vehicle and inform them that they can contact the dealership for any offers or discounts.
-    Answer the query using only the sources provided in each query in a friendly and concise manner.
-    If there isn't enough information below, say you don't know and tell the user to ask questions related to your scope.
-    Every message will have the following format:
-    query: <user query>, sources:\n<formated list of sources>
-    The only exception to this format is when you are asked to summarize the conversation. 
-    In this case, rely only on the conversation history.
-    Once Initialized, greet the user with a welcome message and introduce yourself.
-    If the user is sending a greeting, asking you how are you, or making minor small talk you may reply 
-    like a friendly salesman (ignore the sources provided).
-    If any of the provided sources are in Arabic, translate them before relaying them to the user. 
-    You may only generate responses in English.
-    """
+You are a friendly retrieval-augmented assistant acting as a car salesman for a dealership.
 
-def initializeClients():
-   
+Guidelines:
+- You are in a marketing and sales role. Do NOT provide offers, discounts, invoices, or pricing beyond the listed price.
+- If asked about offers, politely refuse and inform the customer that they must contact the dealership for such details.
+- Use ONLY the provided sources to answer queries, in a friendly and concise manner. 
+- You may format the info differently than it is in the source as long as the content is the same.
+- If there is not enough information, say you don't know and guide the user to ask questions within your scope.
+- If sources are in Arabic, translate them into English before responding.
+- You may only generate responses in English.
+
+Conversation rules:
+- Every message will have the format:
+  query: <user query>
+  sources: \n<formatted list of sources>
+- Exception: If asked to summarize the conversation, use ONLY the conversation history.
+- On initialization, greet the user warmly and introduce yourself.
+- For greetings, small talk, or questions like "how are you," respond naturally like a friendly salesman (ignore sources).
+
+Remember: Stay professional, helpful, and upbeat — like a real car salesman who knows the vehicles inside out.
+"""
+
+
+def initializeClients(): 
     openai_client = AzureOpenAI(
         api_version=AZURE_OPENAI_API_VERSION,
         azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT,
@@ -127,7 +131,8 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     Provide an answer to this query while referring to the sources provided. Answer ONLY in english (translate the source if need be). 
     If the user is sending a greeting, asking you how are you, or making minor small talk you may reply 
     like a friendly salesman (ignore the sources provided).\n
-    query: {query}, sources:\n{sources}
+    query: {query}, 
+    sources:\n{sources}
     """ 
     query = messages[-1]['content']
     latest_message = messages[-1]
@@ -148,29 +153,51 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
         vector_query = VectorizedQuery(
                 vector=embed_query,
                 k_nearest_neighbors=5,
-                fields="text_vector",
+                fields="content_vector",
                 kind="vector",
                 exhaustive=True
             )
 
-        #retrieving documents (hybrid search)
         search_results = search_client.search(
                     include_total_count=True,
                     search_text=query,  
-                    select="brand,model,type,year,price,chunk,features",
+                    select="id, chunk, file_name, page_number, chunk_index, parent_id",
                     top=5,
                     vector_queries=[vector_query]
                 )
 
+        #fetchin neighbouring chunks (Contextual expansion)
+        window= 1 #how many neighbouring chunks do we take from each direction
+        expanded_results = []
+        ids_in_expanded_results = []
+        for doc in search_results:
+
+            if doc["id"] not in ids_in_expanded_results:
+                expanded_results.append(doc)
+                ids_in_expanded_results.append(doc["id"])
+
+            parent_id = doc["parent_id"]
+            chunk_index = doc["chunk_index"]
+            neighbor_filter = f"parent_id eq '{parent_id}' and chunk_index ge {chunk_index - window} and chunk_index le {chunk_index + window}"
+
+            neighbors = search_client.search(
+                search_text="*",
+                filter=neighbor_filter,
+                select="id, chunk, file_name, page_number, chunk_index, parent_id"
+            )
+
+            for n in neighbors:
+                if n["id"] != doc["id"] and n["id"] not in ids_in_expanded_results: 
+                    expanded_results.append(n)
+                    ids_in_expanded_results.append(n["id"])
+
+        #formatting results to pass to model
         sources_formatted = "\n\n".join([
-            f"Brand: {doc['brand']}\n"
-            f"Model: {doc['model']}\n"
-            f"Type: {doc['type']}\n"
-            f"Year: {doc['year']}\n"
-            f"Price: {doc['price']}\n"
-            f"Description: {doc['chunk']}\n"
-            f"Features: {', '.join(doc.get('features') or [])}"
-            for doc in search_results
+            f"chunk: {doc['chunk']}\n"
+            f"file_name: {doc['file_name']}\n"
+            f"page_number: {doc['page_number']}\n"
+            f"chunk_index: {doc['chunk_index']}\n"
+            for doc in expanded_results
         ])
 
         messages[-1]["content"] = grounded_prompt.format(query=query, sources=sources_formatted)
@@ -180,7 +207,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
         stream=False,
         messages=messages,
         max_tokens=MAX_TOKENS,
-        temperature=0.75,
+        temperature=0.8,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
     )
 

@@ -28,7 +28,7 @@ export default function EditDocuments() {
       );
 
       const documents = response.data.documents;
-      setDocumentsList([...new Set(documents.map((doc) => doc.fileName))]);
+      setDocumentsList([...new Set(documents.map((doc) => doc.file_name))]);
     } catch (error) {
       console.error("Error fetching document list:", error);
     }
@@ -124,8 +124,8 @@ export default function EditDocuments() {
             name="files"
             mode="advanced"
             multiple
-            accept="image/*,application/pdf,text/plain"
-            maxFileSize={1000000}
+            accept="image/*,application/pdf"
+            maxFileSize={100000000} //100MB
             customUpload
             uploadHandler={customUploader}
             emptyTemplate={
