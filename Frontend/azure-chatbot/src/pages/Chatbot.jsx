@@ -45,11 +45,11 @@ export default function Chatbot() {
 
       const session = response.data;
       setSessionsList([
-        ...sessionsList,
         {
           session_id: session.session_id,
           session_title: session.session_title,
         },
+        ...sessionsList,
       ]);
       setNewSessionTitle("New Session");
       setCreatingNewSession(false);
