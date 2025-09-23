@@ -42,8 +42,8 @@ export default function Login() {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-bg-primary">
-      <div className="w-full max-w-md bg-bg-secondary p-8 rounded-lg shadow-md">
+    <div className="flex justify-center items-center h-screen w-screen bg-bg-primary">
+      <div className="w-full max-w-sm bg-bg-secondary p-8 rounded-lg shadow-md">
         <h2 className="text-2xl text-text-primary font-bold text-center mb-6">
           Login
         </h2>

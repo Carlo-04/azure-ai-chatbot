@@ -4,6 +4,7 @@ import "./App.css";
 import { UserProvider, useUser } from "./contexts/UserContext";
 
 // Pages/Components
+import Layout from "./components/Layout/Layout";
 import KnowledgeBaseManager from "./pages/KnowledgeBaseManager";
 import EditDocuments from "./pages/EditDocuments";
 import Login from "./pages/Login";
@@ -17,18 +18,21 @@ function App() {
       <Routes>
         {/* Guest Pages */}
         <Route path="/login" element={<Login />} />
-        {/* User Pages */}
-        <Route element={<UserRoute />}>
-          <Route path="/" element={<Chatbot />} />
-          <Route path="/chatbot" element={<Chatbot />} />
-        </Route>
-        {/* Admin Pages */}
-        <Route path="/admin" element={<AdminRoute />}>
-          <Route
-            path="/admin/knowledge-management"
-            element={<KnowledgeBaseManager />}
-          />
-          <Route path="/admin/edit-docs" element={<EditDocuments />} />
+
+        <Route element={<Layout />}>
+          {/* User Pages */}
+          <Route element={<UserRoute />}>
+            <Route path="/" element={<Chatbot />} />
+            <Route path="/chatbot" element={<Chatbot />} />
+          </Route>
+          {/* Admin Pages */}
+          <Route path="/admin" element={<AdminRoute />}>
+            <Route
+              path="/admin/knowledge-management"
+              element={<KnowledgeBaseManager />}
+            />
+            <Route path="/admin/edit-docs" element={<EditDocuments />} />
+          </Route>
         </Route>
       </Routes>
     </Router>
