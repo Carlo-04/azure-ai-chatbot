@@ -80,11 +80,11 @@ export default function KnowledgeBaseManager() {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col p-4">
       <div>
         <h1>Knowledge Base Manager</h1>
       </div>
-      <div className="min-w-100 w-full h-full overflow-y-auto p-4 space-y-2">
+      <div className="min-w-100 w-full h-full overflow-y-auto mt-5 space-y-2">
         {indexList.map((item, idx) => (
           <div
             key={idx}
@@ -110,14 +110,20 @@ export default function KnowledgeBaseManager() {
           </div>
         ))}
         {!isCreatingNewIndex && (
-          <div className="flex justify-center items-center content-center">
+          <div className="flex flex-col justify-center items-center content-center">
             <button
               className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-tertiary"
               onClick={() => setIsCreatingNewIndex(true)}>
               Create Index
             </button>
+            <p className="text-red-500">
+              Note: The chatbot relies on index <i>rag-ict-coueiss-04</i>. I
+              will be removing the option to edit indexes
+            </p>
           </div>
         )}
+
+        {/* form for creating a new index */}
         {isCreatingNewIndex && (
           <div className="flex flex-col gap-5 mt-5 p-5 items-center">
             <input
