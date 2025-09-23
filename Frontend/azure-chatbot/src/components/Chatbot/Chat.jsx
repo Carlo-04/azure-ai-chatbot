@@ -3,15 +3,16 @@ import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import SpeechInput from "./SpeechToText";
 import TextToSpeech from "./TextToSpeech";
-import { useUser } from "../contexts/UserContext";
+import { useUser } from "../../contexts/UserContext";
+import LoadingSpinner from "../LoadingSpinner";
 import "primeicons/primeicons.css";
 
 export default function Chat({ session_id }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const { user } = useUser();
+  const [messageLoading, setMessageLoading] = useState(false);
 
-  //session_id = "9669f81b-48ba-42aa-900b-96229e9841d8";
+  const { user } = useUser();
 
   useEffect(() => {
     if (!session_id) return;
@@ -51,6 +52,7 @@ export default function Chat({ session_id }) {
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    setMessageLoading(true);
 
     // Add user message immediately
     setMessages((prev) => [...prev, { role: "user", content: input }]);
@@ -70,14 +72,15 @@ export default function Chat({ session_id }) {
         }
       );
 
-      console.log(response);
       // Add bot response
+      setMessageLoading(false);
       setMessages((prev) => [
         ...prev,
         { role: "bot", content: response.data.reply },
       ]);
     } catch (error) {
       console.error(error);
+      setMessageLoading(false);
       setMessages((prev) => [
         ...prev,
         { role: "bot", content: "⚠️ Error: could not get response" },
@@ -135,12 +138,15 @@ export default function Chat({ session_id }) {
             )}
           </div>
         ))}
+
+        {messageLoading && <LoadingSpinner />}
       </div>
 
       <div>
         <div className="flex flex-row mt-10 gap-5 items-center">
           <input
             type="text"
+            maxLength="825"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."

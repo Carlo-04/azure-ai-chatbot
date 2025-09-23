@@ -9,8 +9,8 @@ import KnowledgeBaseManager from "./pages/KnowledgeBaseManager";
 import EditDocuments from "./pages/EditDocuments";
 import Login from "./pages/Login";
 import Chatbot from "./pages/Chatbot";
-import AdminRoute from "./components/AdminRoute";
-import UserRoute from "./components/UserRoute";
+import AdminRoute from "./components/Routes/AdminRoute";
+import UserRoute from "./components/Routes/UserRoute";
 
 function App() {
   return (

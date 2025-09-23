@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useNavigate } from "react-router-dom";
-import { useUser } from "../contexts/UserContext";
+import { useUser } from "../../contexts/UserContext";
 
 export default function UserRoute() {
   const { user } = useUser();

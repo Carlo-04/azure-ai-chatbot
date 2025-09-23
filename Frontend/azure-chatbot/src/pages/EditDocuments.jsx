@@ -90,10 +90,10 @@ export default function EditDocuments() {
   };
 
   return (
-    <div>
+    <div className="px-10 bg-yellow-300">
       <h1>Search Index Name: {index_name}</h1>
-      <div className="flex flex-row w-screen mt-10">
-        <div className="flex w-1/2 flex-col gap-2">
+      <div className="flex flex-row mt-10 gap-5">
+        <div className="flex flex-1 w-1/2 flex-col gap-2">
           {documentsList.length == 0 && (
             <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
               No Documents Added Yet
@@ -119,7 +119,7 @@ export default function EditDocuments() {
             </div>
           ))}
         </div>
-        <div className="card flex w-1/2 justify-content-center">
+        <div className="card flex-1 w-1/2 justify-content-center">
           <FileUpload
             name="files"
             mode="advanced"
@@ -129,7 +129,9 @@ export default function EditDocuments() {
             customUpload
             uploadHandler={customUploader}
             emptyTemplate={
-              <p className="m-0">Drag and drop files to here to upload.</p>
+              <p className="m-0 min-h-40">
+                Drag and drop files to here to upload.
+              </p>
             }
           />
         </div>

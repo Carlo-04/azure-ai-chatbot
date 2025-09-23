@@ -2,14 +2,18 @@ import { useState, useEffect, use } from "react";
 import axios from "axios";
 import "primeicons/primeicons.css";
 
+import LoadingSpinner from "../components/LoadingSpinner";
 import { useUser } from "../contexts/UserContext";
-import Chat from "../components/Chat";
+import Chat from "../components/Chatbot/Chat";
 
 export default function Chatbot() {
   const [sessionsList, setSessionsList] = useState([]); //[{"session_id": ..., "session_title": ...}]
+  const [sessionsListLoading, setSessionsListLoading] = useState(true);
   const [newSessionTitle, setNewSessionTitle] = useState("New Session");
-  const [creatingNewSession, setCreatingNewSession] = useState(false);
+  const [creatingNewSession, setCreatingNewSession] = useState(false); //this is the form to create a new session
+  const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState("");
+
   const { user } = useUser();
 
   useEffect(() => {
@@ -24,6 +28,7 @@ export default function Chatbot() {
           params: { user_id: user.id },
         }
       );
+      setSessionsListLoading(false);
       setSessionsList(response.data.sessions);
     } catch (error) {
       console.error(
@@ -35,6 +40,7 @@ export default function Chatbot() {
 
   const handleCreateSession = async () => {
     try {
+      setNewSessionLoading(true);
       const response = await axios.post(
         "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_create_session?",
         {
@@ -51,6 +57,8 @@ export default function Chatbot() {
         },
         ...sessionsList,
       ]);
+      setNewSessionLoading(false);
+      setCurrentSessionId(session.session_id);
       setNewSessionTitle("New Session");
       setCreatingNewSession(false);
     } catch (error) {
@@ -85,11 +93,11 @@ export default function Chatbot() {
     }
   };
   return (
-    <div className="flex flex-row justify-start items-center fixed inset-0">
+    <div className="flex flex-row justify-start items-center w-full h-full">
       {/* Side bar */}
       <div className=" flex flex-col h-full w-1/5 overflow-auto border-r-[0.5px] bg-bg-tertiary">
         {/* Creating Sessions */}
-        <div className="flex flex-1 flex-col w-full items-center py-3">
+        <div className="flex flex-col w-full items-center py-3">
           {creatingNewSession && (
             <div>
               <label className="block text-text-secondary mb-1">
@@ -111,7 +119,8 @@ export default function Chatbot() {
                 <button
                   className="w-1/2 bg-bg-secondary hover:bg-bg-tertiary text-txt-primary"
                   onClick={handleCreateSession}>
-                  Create
+                  {newSessionLoading && "Creating..."}
+                  {!newSessionLoading && "Create"}
                 </button>
               </div>
             </div>
@@ -120,7 +129,7 @@ export default function Chatbot() {
             <button
               className="w-3/4 bg-bg-secondary hover:bg-bg-primary text-txt-primary"
               onClick={() => setCreatingNewSession(true)}>
-              Create index
+              New Session
             </button>
           )}
         </div>
@@ -161,7 +170,8 @@ export default function Chatbot() {
 
         {sessionsList.length == 0 && (
           <div className="flex flex-10 justify-center items-center text-text-secondary">
-            No Sessions Found
+            {!sessionsListLoading && <p>No Sessions Found</p>}
+            {sessionsListLoading && <LoadingSpinner />}
           </div>
         )}
       </div>

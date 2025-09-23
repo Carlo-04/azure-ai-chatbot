@@ -80,11 +80,11 @@ export default function KnowledgeBaseManager() {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col p-4">
       <div>
         <h1>Knowledge Base Manager</h1>
       </div>
-      <div className="min-w-100 w-full h-full overflow-y-auto p-4 space-y-2">
+      <div className="min-w-100 w-full h-full overflow-y-auto mt-5 space-y-2">
         {indexList.map((item, idx) => (
           <div
             key={idx}
