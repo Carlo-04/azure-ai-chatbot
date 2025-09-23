@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, Navigate } from "react-router-dom";
-import { FileUpload } from "primereact/fileupload";
-import { useUser } from "../contexts/UserContext";
 import axios from "axios";
+import { FileUpload } from "primereact/fileupload";
+import { ProgressBar } from "primereact/progressbar";
+import { useUser } from "../contexts/UserContext";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function EditDocuments() {
   const location = useLocation();
   const index_name = location.state?.index_name;
   const { user } = useUser();
   const [documentsList, setDocumentsList] = useState([]); //list of document Names [<string>doc1, <string>doc2]
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   if (!index_name) {
     return <Navigate to="admin/knowledge-management" replace />;
@@ -74,14 +77,26 @@ export default function EditDocuments() {
       const response = await axios.post(
         "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_add_documents?",
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          maxContentLength: Infinity, //actual size restrictions are applied in the FileUpload component
+          maxBodyLength: Infinity,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percent = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setUploadProgress(percent);
+            }
+          },
+        }
       );
       console.log("Upload response:", response.data);
       if (event.options) {
         event.options.clear(); // clears selected files and resets "pending" status
       }
-
-      alert("Files uploaded successfully!");
+      setUploadProgress(null);
+      alert("Search Index Updated Successfully");
       handleGetDocumentsList();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -90,9 +105,38 @@ export default function EditDocuments() {
   };
 
   return (
-    <div className="px-10 bg-yellow-300">
+    <div className="px-10 py-5">
       <h1>Search Index Name: {index_name}</h1>
-      <div className="flex flex-row mt-10 gap-5">
+      <div className="flex md:flex-col lg:flex-row mt-10 gap-5">
+        {/* Uploading files to the index */}
+        <div className="flex flex-1 flex-col w-1/2 justify-content-center">
+          {uploadProgress !== null && (
+            <div className="mt-4">
+              <ProgressBar value={uploadProgress} showValue />
+            </div>
+          )}
+          {uploadProgress == 100 && (
+            <div className="flex flex-row w-full justify-center items-center">
+              <LoadingSpinner />
+              Processing Files
+            </div>
+          )}
+          <FileUpload
+            name="files"
+            mode="advanced"
+            multiple
+            accept="image/*,application/pdf"
+            maxFileSize={50000000} //50MB
+            customUpload
+            uploadHandler={customUploader}
+            emptyTemplate={
+              <p className="m-0 min-h-40">
+                Drag and drop files to here to upload.
+              </p>
+            }
+          />
+        </div>
+        {/* Documents List */}
         <div className="flex flex-1 w-1/2 flex-col gap-2">
           {documentsList.length == 0 && (
             <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
@@ -118,22 +162,6 @@ export default function EditDocuments() {
               </div>
             </div>
           ))}
-        </div>
-        <div className="card flex-1 w-1/2 justify-content-center">
-          <FileUpload
-            name="files"
-            mode="advanced"
-            multiple
-            accept="image/*,application/pdf"
-            maxFileSize={100000000} //100MB
-            customUpload
-            uploadHandler={customUploader}
-            emptyTemplate={
-              <p className="m-0 min-h-40">
-                Drag and drop files to here to upload.
-              </p>
-            }
-          />
         </div>
       </div>
     </div>
