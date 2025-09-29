@@ -6,7 +6,7 @@ export default function TextToSpeech({ text }) {
   const handleClick = async () => {
     try {
       const response = await axios.post(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_text_to_speech?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_text_to_speech",
         { text },
         { responseType: "blob" }
       );

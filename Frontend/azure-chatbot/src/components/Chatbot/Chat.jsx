@@ -26,7 +26,7 @@ export default function Chat({ session_id }) {
 
   const handleGetMessages = async () => {
     const response = await axios.post(
-      "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages?",
+      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages",
       {
         user_id: user.id,
         session_id: session_id,
@@ -39,7 +39,7 @@ export default function Chat({ session_id }) {
 
   const handleClearMessages = async () => {
     const response = await axios.post(
-      "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat?",
+      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat",
       {
         user_id: user.id,
         session_id: session_id,
@@ -63,7 +63,7 @@ export default function Chat({ session_id }) {
       //API call
 
       const response = await axios.post(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_message?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_message",
         {
           user_id: user.id,
           session_id: session_id,

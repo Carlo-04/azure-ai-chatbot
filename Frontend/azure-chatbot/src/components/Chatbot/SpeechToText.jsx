@@ -38,7 +38,7 @@ export default function SpeechInput({ onSetInput }) {
 
         try {
           const res = await axios.post(
-            "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_chatbot_speech_to_text?",
+            "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_speech_to_text",
             form_data,
             {
               headers: { "Content-Type": "multipart/form-data" },
