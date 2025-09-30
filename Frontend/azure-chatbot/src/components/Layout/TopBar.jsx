@@ -16,12 +16,12 @@ export default function TopBar() {
   };
 
   return (
-    <header className="w-full bg-bg-secondary text-text-primary shadow-md px-6 py-3 flex items-center justify-between">
+    <header className="h-15 w-full bg-bg-secondary text-text-primary shadow-md px-6 py-3 flex items-center justify-between">
       <SideBar />
 
       <div className="flex items-center justify-center gap-5">
         <button
-          className="p-button-rounded p-button-outlined p-button-sm bg-bg-tertiary"
+          className="p-button-rounded p-button-outlined p-button-sm bg-bg-tertiary hover:bg-bg-primary"
           onClick={handleLogout}>
           Logout
         </button>

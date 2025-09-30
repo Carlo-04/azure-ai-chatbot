@@ -12,4 +12,5 @@ azure-core
 azure-identity
 azure-ai-formrecognizer
 azure-cognitiveservices-speech
+azure-storage-blob
 bcrypt

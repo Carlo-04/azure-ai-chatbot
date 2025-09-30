@@ -3,7 +3,7 @@
 #   
 ################
 from azure.search.documents import SearchClient
-from azure.core.credentials import AzureKeyCredential
+from azure.core.credentials import AzureKeyCredential, AzureNamedKeyCredential
 from azure.search.documents.indexes import SearchIndexClient
 from azure.ai.formrecognizer import DocumentAnalysisClient, DocumentField
 from azure.search.documents.indexes.models import (
@@ -19,6 +19,7 @@ from azure.search.documents.indexes.models import (
     VectorSearchAlgorithmKind,
     VectorSearchProfile
 )
+from azure.storage.blob import BlobServiceClient
 from openai import AzureOpenAI
 import json
 import os
@@ -32,6 +33,10 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLO
 AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
+
+AZURE_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+AZURE_STORAGE_ACCOUNT_API_KEY = os.getenv("AZURE_STORAGE_ACCOUNT_API_KEY")
+AZURE_STORAGE_ACCOUNT_CONTAINER_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_CONTAINER_NAME")
 
 ##############
 # Getting the embedding dimension of a model
@@ -170,7 +175,7 @@ def createIndex(index_name, index_fields):
 ###############
 # Divide Text into Chunk
 ###############
-def chunkText(text, chunk_size = 500):
+def chunkText(text, chunk_size = 400):
     #str, int -> list[str]
 
     words = text.split()
@@ -201,7 +206,7 @@ def vectorizeString(text):
 ################
 # Add Document to an Index 
 ###############
-def addDocuments(index_name, documents, vector_fields=[], chunk_size=100):
+def addDocuments(index_name, documents, vector_fields=[], chunk_size=400):
 
     # Uploads documents to a vector search index with vectorization and chunking.
     # The function only expects an id field to be present in the search index
@@ -244,6 +249,104 @@ def addDocuments(index_name, documents, vector_fields=[], chunk_size=100):
                 docs_to_upload.append(doc_chunk)
     
     result = search_client.upload_documents(docs_to_upload)
+
+#############
+# Process Document with Doc Intelligence
+############
+def scanDocuments(files):
+    """
+    Receives a list of dicts containing 'url' and 'file_name',
+    runs Azure Document Intelligence 'prebuilt-read' model on each URL,
+    and returns a list of parsed JSON objects for vector DB ingestion. each page is a separate object.
+    
+    files example:
+    [
+        {"url": "https://<storage-account>.blob.core.windows.net/container/file1.pdf?SAS_TOKEN", "file_name": "file1.pdf"},
+        {"url": "https://<storage-account>.blob.core.windows.net/container/file2.pdf?SAS_TOKEN", "file_name": "file2.pdf"}
+    ]
+    """
+
+    endpoint = AZURE_AI_FOUNDRY_ENDPOINT
+    key = AZURE_OPENAI_API_KEY
+
+    client = DocumentAnalysisClient(endpoint=endpoint, 
+                                    credential=AzureKeyCredential(key))
+    results = []
+    for file_info in files:
+        file_url = file_info["url"]
+        file_name = file_info.get("file_name", file_url.split("/")[-1])
+
+        poller = client.begin_analyze_document_from_url(
+            model_id="prebuilt-read",
+            document_url=file_url
+        )
+        result = poller.result()
+        document_id = str(uuid.uuid4())  
+
+        for page_num, page in enumerate(result.pages, start=1):
+            page_text = " ".join([line.content for line in page.lines])
+
+            parsed_result = {
+                "id": f"{document_id}-page{page_num}",  
+                "file_name": file_name,
+                "page_number": page_num,
+                "content": page_text, 
+            }
+
+            results.append(parsed_result)
+
+    return results
+
+
+####################
+# Handles the process of uploading a file to blob storage, processing it with doc intell, adding to index and deleting the blob
+##################
+def addDocumentHelper(index_name, files):
+    """
+    Receives a dict of uploaded files (werkzeug.datastructures.FileStorage),
+    Returns a list of successfully added file names.
+    """
+    # Connecting to blob storage
+    account_name = AZURE_STORAGE_ACCOUNT_NAME
+    storage_account_key = AZURE_STORAGE_ACCOUNT_API_KEY
+    credential = AzureNamedKeyCredential(account_name, storage_account_key)
+
+    blob_service_client = BlobServiceClient(
+        account_url=f"https://{account_name}.blob.core.windows.net",
+        credential=credential
+    )
+
+    container_name = AZURE_STORAGE_ACCOUNT_CONTAINER_NAME
+    container_client = blob_service_client.get_container_client(container_name)
+
+    uploaded_files = []
+    added_files = [] #files successfully added to the index
+    for file_key in files:
+        file = files[file_key]
+
+        # Generate unique file name by appending UUID
+        unique_id = uuid.uuid4().hex
+        name, ext = os.path.splitext(file.filename)
+        unique_filename = f"{name}_{unique_id}{ext}"
+        
+        # Uploading file to blob storage
+        blob_client = container_client.get_blob_client(unique_filename)
+        blob_client.upload_blob(file.stream, overwrite=True)
+
+        current_file = {
+            "file_name": file.filename,
+            "url": blob_client.url
+        }
+        uploaded_files.append(current_file)
+
+        #processing uploaded file with document intelligence
+        processed_file = scanDocuments([current_file])
+        addDocuments(index_name, processed_file, ["content"])
+        blob_client.delete_blob(delete_snapshots="include") #deleting the file after processing
+        added_files.append(file.filename)
+
+    return added_files
+
 
 ####################
 # Find which field is the key field
@@ -308,45 +411,3 @@ def deleteIndex(index_name):
 
     index_client.delete_index(index_name)     
 
-    
-#############
-# Process Document with Doc Intelligence
-############
-def scanDocuments(files):
-    """
-    Receives a dict of uploaded files (werkzeug.datastructures.FileStorage),
-    runs Azure Document Intelligence 'prebuilt-read' model,
-    and returns a list of parsed JSON objects for vector DB ingestion.
-    """
-
-    endpoint = os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
-    key = os.getenv("AZURE_OPENAI_API_KEY")
-
-    client = DocumentAnalysisClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-
-    results = []
-
-    for filename in files:
-        uploaded_file = files[filename]
-        content = uploaded_file.read()
-
-        poller = client.begin_analyze_document(
-            model_id="prebuilt-read",  
-            document=content
-        )
-        result = poller.result()
-        document_id = str(uuid.uuid4())  
-
-        for page_num, page in enumerate(result.pages, start=1):
-            page_text = " ".join([line.content for line in page.lines])
-
-            parsed_result = {
-                "id": f"{document_id}-page{page_num}",  
-                "file_name": uploaded_file.filename,
-                "page_number": page_num,
-                "content": page_text, 
-            }
-
-            results.append(parsed_result)
-
-    return results

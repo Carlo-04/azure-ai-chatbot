@@ -15,7 +15,7 @@ export default function KnowledgeBaseManager() {
   const handleCreateIndex = async () => {
     try {
       const response = await axios.post(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_create_index?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_create_index",
         {
           user_id: user.id,
           index_name: newIndexName,
@@ -42,7 +42,7 @@ export default function KnowledgeBaseManager() {
   const handleGetIndexList = async () => {
     try {
       const response = await axios.get(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_list_indexes?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_list_indexes",
         {
           params: { user_id: user.id },
         }
@@ -58,7 +58,7 @@ export default function KnowledgeBaseManager() {
   const handleDeleteIndex = async (idx) => {
     try {
       const response = await axios.post(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_index?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_index",
         {
           user_id: user.id,
           index_name: indexList[idx],
@@ -118,7 +118,8 @@ export default function KnowledgeBaseManager() {
             </button>
             <p className="text-red-500">
               Note: The chatbot relies on index <i>rag-ict-coueiss-04</i>. I
-              will be removing the option to edit indexes
+              will be removing the option to edit indexes but for now it is
+              useful for testing.
             </p>
           </div>
         )}

@@ -18,7 +18,7 @@ export default function Login() {
 
     try {
       const response = await axios.post(
-        "https://fa-ict-oueiss-sdc-01-dydvgchzadehataz.swedencentral-01.azurewebsites.net/api/http_user_login?",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_user_login",
         { username: username.trim(), password: password.trim() }
       );
 
