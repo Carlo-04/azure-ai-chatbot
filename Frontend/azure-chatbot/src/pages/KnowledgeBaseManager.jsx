@@ -118,7 +118,8 @@ export default function KnowledgeBaseManager() {
             </button>
             <p className="text-red-500">
               Note: The chatbot relies on index <i>rag-ict-coueiss-04</i>. I
-              will be removing the option to edit indexes
+              will be removing the option to edit indexes but for now it is
+              useful for testing.
             </p>
           </div>
         )}
