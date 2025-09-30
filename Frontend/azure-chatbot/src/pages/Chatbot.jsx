@@ -172,7 +172,11 @@ export default function Chatbot() {
         {sessionsList.length == 0 && (
           <div className="flex flex-10 justify-center items-center text-text-secondary">
             {!sessionsListLoading && <p>No Sessions Found</p>}
-            {sessionsListLoading && <LoadingSpinner />}
+            {sessionsListLoading && (
+              <div className="w-20 h-20">
+                <LoadingSpinner />
+              </div>
+            )}
           </div>
         )}
       </div>
