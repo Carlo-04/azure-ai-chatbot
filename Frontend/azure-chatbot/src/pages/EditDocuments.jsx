@@ -14,6 +14,7 @@ export default function EditDocuments() {
   const [documentsList, setDocumentsList] = useState([]); //list of document Names [<string>doc1, <string>doc2]
   const [uploadProgress, setUploadProgress] = useState(null);
   const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsDeleting, setDocumentsDeleting] = useState([]); //this array will hold the indexes of documents being deleted to show loading on their buttons
   if (!index_name) {
     return <Navigate to="admin/knowledge-management" replace />;
   }
@@ -40,8 +41,9 @@ export default function EditDocuments() {
     }
   };
 
-  const handleDeleteDocument = async (file_name) => {
+  const handleDeleteDocument = async (file_name, index) => {
     try {
+      setDocumentsDeleting((prev) => [...prev, index]);
       const response = await axios.post(
         "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_document",
         {
@@ -51,9 +53,8 @@ export default function EditDocuments() {
         }
       );
 
-      if (response.status === 200) {
-        handleGetDocumentsList();
-      }
+      setDocumentsDeleting((prev) => prev.filter((i) => i !== index));
+      setDocumentsList((prev) => prev.filter((doc) => doc !== file_name));
     } catch (error) {
       if (error.response) {
         console.error("Error:", error.response.data);
@@ -117,7 +118,6 @@ export default function EditDocuments() {
         event.options.clear(); // clears selected files and resets "pending" status
       }
       setUploadProgress(null);
-      alert("Search Index Updated Successfully");
       handleGetDocumentsList();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -132,15 +132,17 @@ export default function EditDocuments() {
       <div className="flex md:flex-col lg:flex-row mt-10 gap-5">
         {/* Uploading files to the index */}
         <div className="flex flex-1 flex-col w-1/2 justify-content-center">
+          {uploadProgress == 100 && (
+            <div className="flex flex-row w-full justify-center items-center">
+              <div className="w-20 h-20">
+                <LoadingSpinner />
+              </div>
+              Processing Files
+            </div>
+          )}
           {uploadProgress !== null && (
             <div className="mt-4">
               <ProgressBar value={uploadProgress} showValue />
-            </div>
-          )}
-          {uploadProgress == 100 && (
-            <div className="flex flex-row w-full justify-center items-center">
-              <LoadingSpinner />
-              Processing Files
             </div>
           )}
           <FileUpload
@@ -160,36 +162,38 @@ export default function EditDocuments() {
         </div>
         {/* Documents List */}
         <div className="flex flex-1 w-1/2 flex-col gap-2">
-          {documentsList.length == 0 && (
+          {documentsList.length == 0 && !documentsLoading && (
             <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
-              {documentsLoading ? (
-                <div className="flex w-20 h-20 justify-center items-center">
-                  <LoadingSpinner />
-                </div>
-              ) : (
-                "No Documents Added Yet"
-              )}
+              No Documents Added Yet
             </div>
           )}
-          {documentsList.map((file_name, idx) => (
-            <div
-              key={idx}
-              className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
-              <a
-                href="google.com"
-                className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
-                {file_name}
-              </a>
-
-              <div className="flex gap-2">
-                <button
-                  className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-primary"
-                  onClick={() => handleDeleteDocument(file_name)}>
-                  Delete
-                </button>
+          {documentsLoading && (
+            <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
+              <div className="flex w-20 h-20 justify-center items-center">
+                <LoadingSpinner />
               </div>
             </div>
-          ))}
+          )}
+          {!documentsLoading &&
+            documentsList.map((file_name, idx) => (
+              <div
+                key={idx}
+                className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
+                <a
+                  href="google.com"
+                  className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
+                  {file_name}
+                </a>
+
+                <div className="flex gap-2">
+                  <button
+                    className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-primary"
+                    onClick={() => handleDeleteDocument(file_name, idx)}>
+                    {documentsDeleting.includes(idx) ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            ))}
         </div>
       </div>
     </div>
