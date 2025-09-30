@@ -30,27 +30,39 @@ MAX_TOKENS = 3000
 DEFAULT_CHATBOT_PROMPT = """
 You are a friendly retrieval-augmented assistant acting as a car salesman for a dealership.
 
-Guidelines:
+Conversation Rules:
 - You are in a marketing and sales role. Do NOT provide offers, discounts, invoices, or pricing beyond the listed price.
 - If asked about offers, politely refuse and inform the customer that they must contact the dealership for such details.
-- Use ONLY the provided sources to answer queries, in a friendly and concise manner. 
-- You may format the info differently than it is in the source as long as the content is the same.
-- If there is not enough information, say you don't know and guide the user to ask questions within your scope.
+- When asked about information related to vehicles, call the hybridSearch function to retrieve relevant documents from the knowledge base.
+- Use ONLY the information provided from the knwoeldge base to answer queries, in a friendly and concise manner. 
+- You may format and present the info differently than it is in the source to make it clearer and more organized
+ as long as you don't add or alter the content. You may also give the user part of the information from the search 
+ results if some parts are not relavant to the query.
+- If there is not enough information or if you are asked about something outside your specified scope, 
+say you don't know and guide the user to ask questions within your scope.
+- If a vehicle isn't in the knowledge base, then the dealership does not have it. Politely inform the user of 
+this and have them contact the dealer to ask for more details.
+
+
+Behavior:
+- Every messages should use the knowledge base to provide accurate and relevant information except in a few specific scenarios.
+- Exception: If asked to summarize the conversation, use ONLY the conversation history.
+- Exception: If the user is sending a greeting, asking you how are you, or making minor small 
+talk you may reply as a normal person (and salesperson) would reply (don't call the hybridSearch function).
+- When engaging in small talk, you may use a more casual and friendly tone, but always maintain professionalism 
+and keep the context within greetings and introductions.
+- On initialization, greet the user warmly and introduce yourself. 
 - If sources are in Arabic, translate them into English before responding.
 - You may only generate responses in English.
 
-Conversation rules:
-- Every message will have the format:
-  query: <user query>
-  sources: \n<formatted list of sources>
-- Exception: If asked to summarize the conversation, use ONLY the conversation history.
-- On initialization, greet the user warmly and introduce yourself.
-- For greetings, small talk, or questions like "how are you," respond naturally like a friendly salesman (ignore sources).
 
 Remember: Stay professional, helpful, and upbeat — like a real car salesman who knows the vehicles inside out.
 """
 
 
+####################
+## Client Initialization
+####################
 def initializeClients(): 
     openai_client = AzureOpenAI(
         api_version=AZURE_OPENAI_API_VERSION,
@@ -66,6 +78,9 @@ def initializeClients():
 
     return openai_client, search_client
 
+####################
+## Token Counter
+####################
 def num_tokens_from_messages(messages):
     encoding = tiktoken.encoding_for_model(AZURE_OPENAI_MODEL_NAME)
     num_tokens = 0
@@ -76,8 +91,11 @@ def num_tokens_from_messages(messages):
     num_tokens += 2  # every reply overhead
     return num_tokens
 
+####################
+## Ensuring Token Limit
+####################
 def ensureTokenLimit(openai_client, search_client, user_id, session_id, messages):
-    #This function checks if the token limit is almost reached
+    #This function checks if the token limit is almost reached and if so performs a combination of sliding window and summarization
     #If the limit is almost reached, it summarizes the conversation and creates a new messages list
     #It returns the new/old messages list. If summarized, the message list is only returned with 
     # the summary not the summarization prompt
@@ -121,19 +139,84 @@ def ensureTokenLimit(openai_client, search_client, user_id, session_id, messages
     else:
         return messages
 
+####################
+## Hybrid Search
+####################
+def hybridSearch(query):
+    #This function is used to perform a hybrid search on the search index with context expansion
+    #It returns the search results
 
-def sendMessage(user_id, openai_client, search_client, session_id, messages, rag=True):
+    #embedding the query
+    openai_client, search_client = initializeClients()
+    embed_query = openai_client.embeddings.create(
+        input=query,
+        model=AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME
+    ).data[0].embedding
+
+    vector_query = VectorizedQuery(
+            vector=embed_query,
+            k_nearest_neighbors=5,
+            fields="content_vector",
+            kind="vector",
+            exhaustive=True
+        )
+
+    search_results = search_client.search(
+                include_total_count=True,
+                search_text=query,  
+                select="id, chunk, file_name, page_number, chunk_index, parent_id",
+                top=5,
+                vector_queries=[vector_query]
+            )
+
+    #fetchin neighbouring chunks (Contextual expansion)
+    window= 1 #how many neighbouring chunks do we take from each direction
+    expanded_results = []
+    ids_in_expanded_results = []
+    for doc in search_results:
+
+        if doc["id"] not in ids_in_expanded_results:
+            expanded_results.append(doc)
+            ids_in_expanded_results.append(doc["id"])
+
+        parent_id = doc["parent_id"]
+        chunk_index = doc["chunk_index"]
+        neighbor_filter = f"parent_id eq '{parent_id}' and chunk_index ge {chunk_index - window} and chunk_index le {chunk_index + window}"
+
+        neighbors = search_client.search(
+            search_text="*",
+            filter=neighbor_filter,
+            select="id, chunk, file_name, page_number, chunk_index, parent_id"
+        )
+
+        for n in neighbors:
+            if n["id"] != doc["id"] and n["id"] not in ids_in_expanded_results: 
+                expanded_results.append(n)
+                ids_in_expanded_results.append(n["id"])
+
+    #formatting results to pass to model
+    sources_formatted = "\n\n".join([
+        f"chunk: {doc['chunk']}\n"
+        f"file_name: {doc['file_name']}\n"
+        f"page_number: {doc['page_number']}\n"
+        f"chunk_index: {doc['chunk_index']}\n"
+        for doc in expanded_results
+    ])
+
+    return json.dumps({"vector_search_results": sources_formatted})
+    
+
+####################
+## Send Message
+####################
+def sendMessage(user_id, openai_client, search_client, session_id, messages):
     #This function is used to handle user messages.
     #It sends the api request to the ai search model then passes the results to the openai model with the user query.
-    # and prints the response as it's being generated
 
-    grounded_prompt = """
-    Provide an answer to this query while referring to the sources provided. Answer ONLY in english (translate the source if need be). 
-    If the user is sending a greeting, asking you how are you, or making minor small talk you may reply 
-    like a friendly salesman (ignore the sources provided).\n
-    query: {query}, 
-    sources:\n{sources}
-    """ 
+
+    #add the user query
+    Database.addMessage(user_id, session_id, messages[-1]['role'], messages[-1]['content']) 
+
     query = messages[-1]['content']
     latest_message = messages[-1]
 
@@ -142,82 +225,68 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     messages = ensureTokenLimit(openai_client, search_client, user_id, session_id, messages)
     messages.append(latest_message)
 
-    if rag: #apply rag. typically used for user messages (to be ignored for the first system prompt)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "hybridSearch",
+                "description": "Performs hybrid search on the search index to retrieve relevant documents. Useful for when you need to find relevant information in the knowledge base to answer the query.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The user prompt that was sent to the chat completion model. It the last user message.",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            }
+        }
+    ]
 
-        #embedding the query
-        embed_query = openai_client.embeddings.create(
-            input=query,
-            model=AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME
-        ).data[0].embedding
-
-        vector_query = VectorizedQuery(
-                vector=embed_query,
-                k_nearest_neighbors=5,
-                fields="content_vector",
-                kind="vector",
-                exhaustive=True
-            )
-
-        search_results = search_client.search(
-                    include_total_count=True,
-                    search_text=query,  
-                    select="id, chunk, file_name, page_number, chunk_index, parent_id",
-                    top=5,
-                    vector_queries=[vector_query]
-                )
-
-        #fetchin neighbouring chunks (Contextual expansion)
-        window= 1 #how many neighbouring chunks do we take from each direction
-        expanded_results = []
-        ids_in_expanded_results = []
-        for doc in search_results:
-
-            if doc["id"] not in ids_in_expanded_results:
-                expanded_results.append(doc)
-                ids_in_expanded_results.append(doc["id"])
-
-            parent_id = doc["parent_id"]
-            chunk_index = doc["chunk_index"]
-            neighbor_filter = f"parent_id eq '{parent_id}' and chunk_index ge {chunk_index - window} and chunk_index le {chunk_index + window}"
-
-            neighbors = search_client.search(
-                search_text="*",
-                filter=neighbor_filter,
-                select="id, chunk, file_name, page_number, chunk_index, parent_id"
-            )
-
-            for n in neighbors:
-                if n["id"] != doc["id"] and n["id"] not in ids_in_expanded_results: 
-                    expanded_results.append(n)
-                    ids_in_expanded_results.append(n["id"])
-
-        #formatting results to pass to model
-        sources_formatted = "\n\n".join([
-            f"chunk: {doc['chunk']}\n"
-            f"file_name: {doc['file_name']}\n"
-            f"page_number: {doc['page_number']}\n"
-            f"chunk_index: {doc['chunk_index']}\n"
-            for doc in expanded_results
-        ])
-
-        messages[-1]["content"] = grounded_prompt.format(query=query, sources=sources_formatted)
-
-    full_reply = ""
+    # First API call: Ask the model to use the functions
     response = openai_client.chat.completions.create(
         stream=False,
         messages=messages,
         max_tokens=MAX_TOKENS,
         temperature=0.8,
-        model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
+        model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+        tools=tools,
+        tool_choice="auto",
+        )
+
+    response_message = response.choices[0].message
+    messages.append(response_message)
+
+    # Handle function calls
+    if response_message.tool_calls:
+        for tool_call in response_message.tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
+            
+            if function_name == "hybridSearch":
+                function_response = hybridSearch(
+                    query=function_args.get("query")
+                )
+            else:
+                function_response = json.dumps({"error": "Unknown function"})
+            
+            messages.append({
+                "tool_call_id": tool_call.id,
+                "role": "tool",
+                "name": function_name,
+                "content": function_response,
+            })
+
+    # Second API call: Get the final response from the model
+    final_response = openai_client.chat.completions.create(
+        model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+        messages=messages,
+        max_tokens=MAX_TOKENS,
     )
 
-    full_reply = response.choices[0].message.content
-
-    #replace the last user message with the original query (without sources in the case of RAG)
-    messages[-1]["content"] = query
-
-    #typically the last message is the user's message but sometimes it could be a system message
-    Database.addMessage(user_id, session_id, messages[-1]['role'], messages[-1]['content']) 
+    full_reply = final_response.choices[0].message.content
     Database.addMessage(user_id, session_id, "assistant", full_reply)
 
     messages.append({
@@ -227,7 +296,10 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages, rag
     
     return messages
 
-def sendMessageHelper(user_id, session_id, query, rag):
+####################
+## Send Message Helper
+####################
+def sendMessageHelper(user_id, session_id, query):
     
     openai_client, search_client = initializeClients()
     messages = Database.getMessages(user_id=user_id, session_id=session_id)
@@ -244,51 +316,77 @@ def sendMessageHelper(user_id, session_id, query, rag):
         search_client=search_client,
         session_id=session_id,
         messages=messages,
-        rag=rag
     )
     
     reply = updated_messages[-1]["content"]
     openai_client.close()
     return reply
 
-
-def listMessages(user_id, session_id):
-        return Database.getMessages(user_id=user_id, session_id=session_id)
-
-def createSession(user_id, session_name):
-
-    new_session_id = Database.addSession(user_id, session_name)
+###################
+## Initialize Chat
+###################
+def initializeChat(user_id, session_id):
+    """
+    Initializes a new chat session with a greeting message from the assistant
+    Mainly used when creating a new session and clearing the session
+    """
     openai_client, search_client = initializeClients()
-
     messages = [
                 {
                     "role": "system",
                     "content": DEFAULT_CHATBOT_PROMPT
                 }
             ]
-    messages = sendMessage(user_id, openai_client, search_client, new_session_id, messages, False)
-    openai_client.close()
-    return new_session_id
+    
+    full_reply = ""
+    response = openai_client.chat.completions.create(
+        stream=False,
+        messages=messages,
+        max_tokens=MAX_TOKENS,
+        temperature=0.8,
+        model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+        )
 
+    full_reply = response.choices[0].message.content
 
-def clearChat(user_id, session_id):
+    Database.addMessage(user_id, session_id, messages[-1]['role'], messages[-1]['content']) 
+    Database.addMessage(user_id, session_id, "assistant", full_reply)
 
-    openai_client, search_client = initializeClients()
-    messages = Database.getMessages(user_id=user_id, session_id=session_id)
-
-    messages = [
-        {
-            "role": "system",
-            "content": DEFAULT_CHATBOT_PROMPT
-        }
-    ]
-    Database.clearSession(user_id=user_id, session_id=session_id)
-    messages = sendMessage(user_id, openai_client, search_client, session_id, messages, False)
+    messages.append({
+        "role": "assistant",
+        "content": full_reply
+    })
+        
     openai_client.close()
     return messages
 
-        
 
+def listMessages(user_id, session_id):
+        return Database.getMessages(user_id=user_id, session_id=session_id)
+
+###################
+## Create Session
+###################
+def createSession(user_id, session_name):
+
+    new_session_id = Database.addSession(user_id, session_name)
+    initializeChat(user_id, new_session_id)
+    return new_session_id
+
+
+###################
+## Clear Chat
+###################
+def clearChat(user_id, session_id):
+
+    Database.clearSession(user_id=user_id, session_id=session_id)
+    messages = initializeChat(user_id, session_id)
+    return messages
+
+        
+###################
+## Speech To Text
+###################
 def transcribeAudio(file):
     """
     Sends an audio file to Azure AI Foundry Fast Transcription service
@@ -322,7 +420,9 @@ def transcribeAudio(file):
     # Extract text if available, else return raw JSON
     return transcript
 
-
+###################
+## Text To Speech
+###################
 def generateAudio(text):
     #Takes a string and returns the audio content as raw bytes
 

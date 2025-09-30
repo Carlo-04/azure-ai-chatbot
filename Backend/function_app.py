@@ -111,9 +111,8 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         query = req_body.get("query")
-        rag = req_body.get("rag", True)
 
-        reply = Chatbot.sendMessageHelper(user_id, session_id, query, rag)
+        reply = Chatbot.sendMessageHelper(user_id, session_id, query)
         
         return func.HttpResponse(
             json.dumps({"reply": reply}, ensure_ascii=False).encode('utf-8'),
@@ -595,12 +594,12 @@ def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
     #This function receives files, processes them with document intelligence and adds them to the index
     try:
         # Get all uploaded files
-        files = req.files
+        files = req.files #Note: if all files are uplaoded under the same kay, only the first will be read
         index_name = req.form.get("index_name")
         user_id = req.form.get("user_id")
 
         if not user_id or not index_name:
-            return func.HttpResponse("User ID and Index Name are missing", status_code=400)
+            return func.HttpResponse("User ID or Index Name is missing", status_code=400)
         
         if not files:
             return func.HttpResponse("No files uploaded", status_code=400)
@@ -612,10 +611,10 @@ def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
 
-        processed_files = AISearch.scanDocuments(files)
-        AISearch.addDocuments(index_name, processed_files, ["content"])
+        uploaded_files = AISearch.addDocumentHelper(index_name=index_name, files=files)
 
         return func.HttpResponse(
+            json.dumps({"uploaded_files": uploaded_files}),
             status_code=200,
             mimetype="application/json"
         )
