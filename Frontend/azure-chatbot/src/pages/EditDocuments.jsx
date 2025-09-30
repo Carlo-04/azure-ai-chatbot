@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import axios from "axios";
+import { jsPDF } from "jspdf";
 import { FileUpload } from "primereact/fileupload";
 import { ProgressBar } from "primereact/progressbar";
 import { useUser } from "../contexts/UserContext";
@@ -12,7 +13,7 @@ export default function EditDocuments() {
   const { user } = useUser();
   const [documentsList, setDocumentsList] = useState([]); //list of document Names [<string>doc1, <string>doc2]
   const [uploadProgress, setUploadProgress] = useState(null);
-
+  const [documentsLoading, setDocumentsLoading] = useState(true);
   if (!index_name) {
     return <Navigate to="admin/knowledge-management" replace />;
   }
@@ -23,6 +24,7 @@ export default function EditDocuments() {
 
   const handleGetDocumentsList = async () => {
     try {
+      setDocumentsLoading(true);
       const response = await axios.get(
         "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_list_documents",
         {
@@ -32,6 +34,7 @@ export default function EditDocuments() {
 
       const documents = response.data.documents;
       setDocumentsList([...new Set(documents.map((doc) => doc.file_name))]);
+      setDocumentsLoading(false);
     } catch (error) {
       console.error("Error fetching document list:", error);
     }
@@ -68,10 +71,28 @@ export default function EditDocuments() {
     const formData = new FormData();
     formData.append("index_name", index_name);
     formData.append("user_id", user.id);
+
     // append all selected files with unique keys
-    event.files.forEach((file, idx) => {
+    for (let idx = 0; idx < event.files.length; idx++) {
+      let file = event.files[idx];
+
+      // If it's a .txt file, convert to PDF
+      if (file.type === "text/plain" || file.name.endsWith(".txt")) {
+        const text = await file.text(); // read text
+        const doc = new jsPDF();
+
+        // simple: add text (line wrapping handled automatically)
+        doc.text(text, 10, 10);
+
+        // create a Blob PDF file
+        const pdfBlob = doc.output("blob");
+        file = new File([pdfBlob], file.name.replace(/\.txt$/, ".pdf"), {
+          type: "application/pdf",
+        });
+      }
+
       formData.append(`file${idx}`, file);
-    });
+    }
 
     try {
       const response = await axios.post(
@@ -126,7 +147,7 @@ export default function EditDocuments() {
             name="files"
             mode="advanced"
             multiple
-            accept="image/*,application/pdf"
+            accept="image/*,application/pdf, text/plain"
             maxFileSize={50000000} //50MB
             customUpload
             uploadHandler={customUploader}
@@ -141,7 +162,13 @@ export default function EditDocuments() {
         <div className="flex flex-1 w-1/2 flex-col gap-2">
           {documentsList.length == 0 && (
             <div className="flex w-full h-full rounded-2xl bg-bg-tertiary text-text-secondary items-center justify-center text-lg">
-              No Documents Added Yet
+              {documentsLoading ? (
+                <div className="flex w-20 h-20 justify-center items-center">
+                  <LoadingSpinner />
+                </div>
+              ) : (
+                "No Documents Added Yet"
+              )}
             </div>
           )}
           {documentsList.map((file_name, idx) => (

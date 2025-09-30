@@ -139,7 +139,11 @@ export default function Chat({ session_id }) {
           </div>
         ))}
 
-        {messageLoading && <LoadingSpinner />}
+        {messageLoading && (
+          <div className="self-start h-15 w-15 bg-bg-secondary rounded-2xl">
+            <LoadingSpinner />{" "}
+          </div>
+        )}
       </div>
 
       <div>
