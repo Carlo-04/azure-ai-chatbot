@@ -8,8 +8,6 @@ import Chatbot
 import AISearch
 import Database
 
-TEST_USER_ID = "16b8fef2-4058-4654-bbba-6bffe2058d28"
-
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 ############
@@ -306,6 +304,9 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
         )
     
 
+#
+#########   Speech To Text #################
+#
 @app.function_name(name="SpeechToText")
 @app.route(route="http_chatbot_speech_to_text", methods=["POST"])
 def speechToText(req: func.HttpRequest) -> func.HttpResponse:
@@ -329,6 +330,9 @@ def speechToText(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
     
+#
+#########   Text To Speech #################
+#
 @app.function_name(name="TextToSpeech")
 @app.route(route="http_chatbot_text_to_speech", methods=["POST"])
 def textToSpeech(req: func.HttpRequest) -> func.HttpResponse:
