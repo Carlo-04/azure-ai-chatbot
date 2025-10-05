@@ -62,7 +62,7 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
 
-        user = Database.login(username, password)
+        user = Database.login(email=username, password=password)
 
         if user:
             return func.HttpResponse(
@@ -91,9 +91,9 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Sending a Message #################
 #
-@app.function_name(name="MessageTrigger")
-@app.route(route="http_chatbot_message", methods=["POST"])
-def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="SendMessage")
+@app.route(route="chatbot_send_message", methods=["POST"])
+def chatbotSendMessage(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -130,8 +130,8 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 #########   Getting the List of Sessions #################
 #
 @app.function_name(name="GetSessions")
-@app.route(route="http_chatbot_get_sessions", methods=["GET"])
-def httpChatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_get_sessions", methods=["GET"])
+def chatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         user_id = req.params.get("user_id")  
@@ -164,8 +164,8 @@ def httpChatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
 #########   Creating a Session #################
 #
 @app.function_name(name="CreateSession")
-@app.route(route="http_chatbot_create_session", methods=["POST"])
-def httpChatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_create_session", methods=["POST"])
+def chatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         req_body = req.get_json()
@@ -200,8 +200,8 @@ def httpChatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
 #########   Deleting a Session #################
 #
 @app.function_name(name="DeleteSession")
-@app.route(route="http_chatbot_delete_session", methods=["POST"])
-def httpChatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_delete_session", methods=["POST"])
+def chatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         req_body = req.get_json()
@@ -234,8 +234,8 @@ def httpChatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
 #########   Getting the List of Messages #################
 #
 @app.function_name(name="GetMessagesTrigger")
-@app.route(route="http_chatbot_get_messages", methods=["POST"])
-def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_get_messages", methods=["POST"])
+def chatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -269,9 +269,9 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Clearing Messages #################
 #
-@app.function_name(name="ClearChatTrigger")
-@app.route(route="http_chatbot_clear_chat", methods=["POST"])
-def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="ClearChat")
+@app.route(route="chatbot_clear_chat", methods=["POST"])
+def chatbotClearChat(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -308,8 +308,8 @@ def httpChatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 #########   Speech To Text #################
 #
 @app.function_name(name="SpeechToText")
-@app.route(route="http_chatbot_speech_to_text", methods=["POST"])
-def speechToText(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_speech_to_text", methods=["POST"])
+def chatbotSpeechToText(req: func.HttpRequest) -> func.HttpResponse:
     try:
         file = req.files.get("file")
         if not file:
@@ -334,8 +334,8 @@ def speechToText(req: func.HttpRequest) -> func.HttpResponse:
 #########   Text To Speech #################
 #
 @app.function_name(name="TextToSpeech")
-@app.route(route="http_chatbot_text_to_speech", methods=["POST"])
-def textToSpeech(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="chatbot_text_to_speech", methods=["POST"])
+def chatbotTextToSpeech(req: func.HttpRequest) -> func.HttpResponse:
     try:
         req_body = req.get_json()
         text = req_body.get("text")
@@ -712,3 +712,182 @@ def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
+
+######################
+## Customer Support APIs
+#####################
+#
+#########   List Open Support Requests #################
+#
+@app.function_name(name="ListOpenRequests")
+@app.route(route="customer_support_list_open_requests", methods=["GET"])
+def CustomerSupportListOpenRequests(req: func.HttpRequest) -> func.HttpResponse:
+    #returns a dic with every retreivable field per doc
+
+    try:
+        # Parse request body
+        user_id = req.params.get("user_id")
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        requests = Database.getOpenSupportRequests()
+        
+        return func.HttpResponse(
+            json.dumps({"open_requests": requests}, ensure_ascii=False).encode('utf-8'),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in ListOpenRequests HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########   List InProgress Support Requests By Agent #################
+#
+@app.function_name(name="ListInProgressRequestsByAgent")
+@app.route(route="customer_support_list_in_progress_requests_by_agent", methods=["GET"])
+def CustomerSupportListInProgressRequestsByAgent(req: func.HttpRequest) -> func.HttpResponse:
+    #returns a dic with every retreivable field per doc
+
+    try:
+        # Parse request body
+        user_id = req.params.get("user_id")
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        requests = Database.getSupportInProgressRequestsByAgent(user_id)
+        
+        return func.HttpResponse(
+            json.dumps({"in_progress_requests": requests}, ensure_ascii=False).encode('utf-8'),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in ListInProgressRequestsByAgent HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+#
+#########  Handle Support Request  #################
+#
+@app.function_name(name="HandleSupportRequest")
+@app.route(route="customer_support_handle_support_request", methods=["POST"])
+def CustomerHandleSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        req_body = req.get_json()
+        user_id = req_body.get("user_id") #admin id
+        request_id = req_body.get("request_id")
+        customer_id = req_body.get("customer_id")
+
+        if not user_id or not request_id or not customer_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id, customer_id, and request_id are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        results = Database.handleSupportRequest(user_id, customer_id,request_id)
+
+        if results == -1:
+            return func.HttpResponse(
+                json.dumps({"error": "This request is already being handled by another agent."}),
+                status_code=409,
+                mimetype="application/json"
+            )
+        
+        return func.HttpResponse(
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in HandleSupportRequest HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
+#########  Close Support Request  #################
+#
+@app.function_name(name="CloseSupportRequest")
+@app.route(route="customer_support_close_support_request", methods=["POST"])
+def CustomerCloseSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        req_body = req.get_json()
+        user_id = req_body.get("user_id") #admin id
+        request_id = req_body.get("request_id")
+        customer_id = req_body.get("customer_id")
+
+        if not user_id or not request_id or not customer_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id, customer_id, and request_id are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        Database.closeSupportRequest(user_id, customer_id,request_id)
+
+        return func.HttpResponse(
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in closeSupportRequest HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )

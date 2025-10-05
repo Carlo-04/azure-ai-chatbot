@@ -9,6 +9,7 @@ import tiktoken
 import json
 import os
 import requests
+import re
 
 import Database
 
@@ -26,39 +27,72 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
-MAX_TOKENS = 3000
+MAX_TOKENS = 4096
+
 DEFAULT_CHATBOT_PROMPT = """
-You are a friendly retrieval-augmented assistant acting as a car salesman for a dealership.
+You are a friendly retrieval-augmented assistant acting as a representative for a dealership. 
+Your primary role is to assist old and potential customers with their inquiries about vehicles, dealership information, or service-related issues.
 
-Conversation Rules:
-- You are in a marketing and sales role. Do NOT provide offers, discounts, invoices, or pricing beyond the listed price.
-- If asked about offers, politely refuse and inform the customer that they must contact the dealership for such details.
-- When asked about information related to vehicles, call the hybridSearch function to retrieve relevant documents from the knowledge base.
-- Use ONLY the information provided from the knwoeldge base to answer queries, in a friendly and concise manner. 
-- You may format and present the info differently than it is in the source to make it clearer and more organized
- as long as you don't add or alter the content. You may also give the user part of the information from the search 
- results if some parts are not relavant to the query.
-- If there is not enough information or if you are asked about something outside your specified scope, 
-say you don't know and guide the user to ask questions within your scope.
-- If a vehicle isn't in the knowledge base, then the dealership does not have it. Politely inform the user of 
-this and have them contact the dealer to ask for more details.
+You have 3 core capabilities:
+1. **Vehicle & Dealership Information (RAG)** — Use the `hybridSearch` function when 
+the user asks questions about vehicles, dealership locations, hours, or services.
+2. **Customer Support Requests** — Use the `createSupportRequest` function only when 
+the user clearly describes a problem or issue they are facing with their vehicle or dealership services.
+3. **Natural Conversation & Small Talk** — Respond to greetings, casual conversation, 
+and polite chat in a natural, human-like way **without invoking any function**.
+
+---
+
+## Conversation Priority Rules (Highest to Lowest)
+
+1. **Greetings / Small Talk:**
+    - If the user's message is a greeting (e.g., “hi”, “hello”, “good morning”, “hey there”) 
+    or small talk (e.g., “how are you?”, “nice to meet you”, “good to see you”), respond naturally and **do not call any function**.
+    - Example responses:
+        - User: “Hi!” → Assistant: “Hello there! How are you today?”
+        - User: “Good afternoon, how's it going?” → Assistant: “Good afternoon! I'm doing great, thank you. How about you?”
+    - If the greeting is combined with another intent (e.g., “Hi, I need help with my car”), consider utilizing the following functions.
+
+2. **Support Requests:**
+    - Required fields for creating a support request:
+        1. Vehicle make
+        2. Vehicle model
+        3. Vehicle year
+        4. A brief description of the specific issue (e.g., "the AC isn't working," "the car is making a noise").
+
+    - Alwways check the user's latest mesage for these fields. They must all be present in the user's response.
+    - Only after all fields are collected, ask the customer if they want you to create the support request.
+    - Never skip or bypass the field collection step.
+    - If the user agrees on a draft that was missing information, once that info is collected, send the new draft for confirmation.
 
 
-Behavior:
-- Every messages should use the knowledge base to provide accurate and relevant information except in a few specific scenarios.
-- Exception: If asked to summarize the conversation, use ONLY the conversation history.
-- Exception: If the user is sending a greeting, asking you how are you, or making minor small 
-talk you may reply as a normal person (and salesperson) would reply (don't call the hybridSearch function).
-- When engaging in small talk, you may use a more casual and friendly tone, but always maintain professionalism 
-and keep the context within greetings and introductions.
-- On initialization, greet the user warmly and introduce yourself. 
-- If sources are in Arabic, translate them into English before responding.
-- You may only generate responses in English.
+3. **Vehicle & Dealership Info (RAG Search):**
+    - When the user asks for information about cars, services, dealership details, or inventory, call the `hybridSearch` function.
+    - Use only retrieved information to answer queries.
+    - If the user mixes small talk with a vehicle question (e.g., “Hi, can you tell me about the 2024 Civic?”), respond warmly but prioritize the vehicle question.
+    - Use ONLY the information provided from the knowledge base to answer queries.
+    - You may reformat or organize the information to make it clearer and easier to understand, 
+    but do not add, remove, or alter factual content.
+    - Provide only the details that directly address the user's query. Omit irrelevant details 
+    unless the user explicitly requests them.
 
 
-Remember: Stay professional, helpful, and upbeat — like a real car salesman who knows the vehicles inside out.
+---
+
+## Behavioral Guidelines
+
+    - Never call any function for greetings, casual conversation, or small talk.
+    - Only call a function if the user explicitly asks for vehicle info or requests support.
+    - If unsure whether the message is small talk or a support query, **default to small talk**.
+    - Do not provide offers, invoices, discounts, financing, or promotions unless found explicitly in the knowledge base.
+    - If a car or service isn't in the knowledge base, politely inform the user and suggest contacting the dealership.
+    - When asked about dealership details, first check the knowledge base; if unavailable, politely decline.
+    - During support conversations, rely on chat context — do not use `hybridSearch` unless the user switches topics.
+    - On initialization, greet the user warmly, introduce yourself, and do **not** trigger any function calls.
+    - Translate non-English sources to English before responding, and always reply in English.
+---
+
 """
-
 
 ####################
 ## Client Initialization
@@ -140,7 +174,7 @@ def ensureTokenLimit(openai_client, search_client, user_id, session_id, messages
         return messages
 
 ####################
-## Hybrid Search
+## Hybrid Search    --  Chatbot Function
 ####################
 def hybridSearch(query):
     #This function is used to perform a hybrid search on the search index with context expansion
@@ -205,6 +239,37 @@ def hybridSearch(query):
 
     return json.dumps({"vector_search_results": sources_formatted})
     
+####################
+## Create Customer Support Request    --  Chatbot Function
+####################
+def createSupportRequest(user_id, subject, description):
+    #This function is used to create a customer support request
+    #It stores the request in the database and returns a confirmation message
+    
+    request_id = Database.addSupportRequest(user_id, subject, description)
+    return json.dumps({"request_id": request_id, "status": "Support request created successfully."})
+
+####################
+## Validate Support Request    --  Chatbot Function Helper
+####################
+def validateSupportRequest(user_messages, parameters_required, arguments):
+    """
+    Validates if a user's message contains the required fields for a support request.
+    checks the values giving to the make, model, and year parameters and uses a regex to 
+    verify that the model didn't hallucinate them.
+    returns an array of the missing/false parameters
+    """
+    missing = []
+    for i in range(len(arguments)):
+        if arguments[i] is None:
+            missing.append(parameters_required[i])
+        
+        else:
+            arg = arguments[i].lower()
+            pattern = r'\b' + re.escape(arg) + r'\b'
+            if not re.search(pattern, user_messages):
+                missing.append(parameters_required[i])
+    return missing
 
 ####################
 ## Send Message
@@ -242,6 +307,49 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                     "required": ["query"],
                 },
             }
+        },        
+        {
+            "type": "function",
+            "function": {
+                "name": "createSupportRequest",
+                "description": """
+                Creates a customer support request in the database.
+                Useful for when the user wants to create a support request regarding an issue they are facing.
+                If you don't have enough information to assist the user or if the user needs actual physical assistance,
+                you should create a support request by calling this function.
+                """,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": "The id of the user issuing the support request. This will be passed from the backend. you don't have access to it directly.",
+                        },
+                        "subject": {
+                            "type": "string",
+                            "description": "This is a title (a brief sentence) summarizing the user's issue. You generate it from the conversation.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A detailed description of the user's issue (under 120 words). You generate it from the user message history. "
+                            "It should include the vehicle make, model, year, and issue description EXACTLY as provided by the customer (no added details).",
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "This is the model of the vehicle owned by the user.",
+                        },
+                        "make": {
+                            "type": "string",
+                            "description": "This is the make of the vehicle owned by the user.",
+                        },
+                        "year": {
+                            "type": "string",
+                            "description": "This is the year of the vehicle owned by the user",
+                        },
+                    },
+                    "required": ["user_id", "subject", "description"],
+                },
+            }
         }
     ]
 
@@ -249,9 +357,9 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
     response = openai_client.chat.completions.create(
         stream=False,
         messages=messages,
-        max_tokens=MAX_TOKENS,
-        temperature=0.8,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+        temperature=0.8,
+        max_tokens=MAX_TOKENS,
         tools=tools,
         tool_choice="auto",
         )
@@ -261,28 +369,54 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 
     # Handle function calls
     if response_message.tool_calls:
-        for tool_call in response_message.tool_calls:
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            
-            if function_name == "hybridSearch":
-                function_response = hybridSearch(
-                    query=function_args.get("query")
-                )
+        # for tool_call in response_message.tool_calls:
+        #     function_name = tool_call.function.name
+        #     function_args = json.loads(tool_call.function.arguments)
+        tool_call = response_message.tool_calls[0]  
+        function_name = tool_call.function.name
+        function_args = json.loads(tool_call.function.arguments)
+        
+        if function_name == "hybridSearch":
+            function_response = hybridSearch(
+                query=function_args.get("query")
+            )
+        elif function_name == "createSupportRequest":
+            #checking if the user provided all the required details throughout the conversation (accounting for hallucinations)
+            user_messages = " ".join([m['content'] for m in messages[:-1] if m.get('role') == "user"]).lower()
+            parameters_required = ["model", "make", "year"]
+            arguments = [function_args.get(param) for param in parameters_required]
+            missing = validateSupportRequest(user_messages, parameters_required, arguments)
+
+            if len(missing)>0:
+                # Prompt the user for missing fields instead of creating the request
+                followup_prompt = f"Thank you for your cooperation. In order for me to create your support request, I need you to provide me with: {', '.join(missing)}."
+                messages.append({
+                    "role": "assistant",
+                    "content": followup_prompt
+                })
+                Database.addMessage(user_id, session_id, "assistant", followup_prompt)
+                return messages
             else:
-                function_response = json.dumps({"error": "Unknown function"})
-            
-            messages.append({
-                "tool_call_id": tool_call.id,
-                "role": "tool",
-                "name": function_name,
-                "content": function_response,
-            })
+                function_response = createSupportRequest(
+                    user_id=user_id,
+                    subject=function_args.get("subject"),
+                    description=function_args.get("description")
+                )
+        else:
+            function_response = json.dumps({"error": "Unknown function"})
+        
+        messages.append({
+            "tool_call_id": tool_call.id,
+            "role": "tool",
+            "name": function_name,
+            "content": function_response,
+        })
 
     # Second API call: Get the final response from the model
     final_response = openai_client.chat.completions.create(
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
         messages=messages,
+        temperature=0.8,
         max_tokens=MAX_TOKENS,
     )
 
@@ -459,4 +593,3 @@ def generateAudio(text):
             f"Speech synthesis canceled: {cancellation_details.reason}, "
             f"details: {cancellation_details.error_details}"
         )
-    
