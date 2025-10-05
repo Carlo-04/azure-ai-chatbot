@@ -362,7 +362,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
         stream=False,
         messages=messages,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
-        temperature=0.3,
+        temperature=0.5,
         max_tokens=MAX_TOKENS,
         tools=tools,
         tool_choice="auto",

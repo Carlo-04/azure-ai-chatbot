@@ -66,7 +66,6 @@ export default function Chat({ session_id }) {
           user_id: user.id,
           session_id: session_id,
           query: input,
-          rag: true,
         }
       );
 
