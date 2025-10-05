@@ -281,7 +281,7 @@ def getOpenSupportRequests():
     container = initializeContainer(1)    
     requests = list(container.query_items(
         query=query,
-        enable_cross_partition_query=True
+        partition_key="none"
     ))
 
     formatted_requests = [
@@ -332,14 +332,6 @@ def getSupportInProgressRequestsByAgent(user_id):
     
     return formatted_requests
 
-def getUserEmail(user_id):
-    if not userIsValid(user_id):
-        raise ValueError("This user does not exist")
-    
-    container = initializeContainer(0)
-    user = container.read_item(item=user_id, partition_key=user_id)
-    return user.get("email")
-
 
 def addSupportRequest(user_id, subject, description):
     if not userIsValid(user_id):
@@ -353,7 +345,7 @@ def addSupportRequest(user_id, subject, description):
         "subject": subject,
         "description": description,
         "status": "open",  # open, in_progress, resolved
-        "supportAgentId": None,  # to be assigned later
+        "supportAgentId": "none",  # to be assigned later
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
     container = initializeContainer(1)
@@ -378,16 +370,21 @@ def handleSupportRequest(user_id, customer_id, request_id):
     requests = list(container.query_items(
         query=query_messages,
         parameters=parameters,
-        enable_cross_partition_query=True
+        partition_key="none"
         ))
     if requests:
         request = requests[0]
-        if request["supportAgentId"] is not None:
+        if request["supportAgentId"] != "none":
             return -1  # already assigned to another agent
+        
+        container.delete_item(
+            item=request["id"],
+            partition_key="none"
+        )
         
         request["status"] = 'in_progress'
         request["supportAgentId"] = user_id
-        container.replace_item(item=request["id"], body=request)
+        container.create_item(body=request)
     else:
         raise ValueError("This request does not exist anymore.")
 
