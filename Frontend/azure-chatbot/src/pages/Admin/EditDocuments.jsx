@@ -4,8 +4,8 @@ import axios from "axios";
 import { jsPDF } from "jspdf";
 import { FileUpload } from "primereact/fileupload";
 import { ProgressBar } from "primereact/progressbar";
-import { useUser } from "../contexts/UserContext";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { useUser } from "../../contexts/UserContext";
+import LoadingSpinner from "../../components/LoadingSpinner";
 
 export default function EditDocuments() {
   const location = useLocation();

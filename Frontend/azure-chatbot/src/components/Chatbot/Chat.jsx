@@ -26,7 +26,7 @@ export default function Chat({ session_id }) {
 
   const handleGetMessages = async () => {
     const response = await axios.post(
-      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_get_messages",
+      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_get_messages",
       {
         user_id: user.id,
         session_id: session_id,
@@ -39,7 +39,7 @@ export default function Chat({ session_id }) {
 
   const handleClearMessages = async () => {
     const response = await axios.post(
-      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_clear_chat",
+      "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_clear_chat",
       {
         user_id: user.id,
         session_id: session_id,
@@ -60,10 +60,8 @@ export default function Chat({ session_id }) {
     setInput("");
 
     try {
-      //API call
-
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_message",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_send_message",
         {
           user_id: user.id,
           session_id: session_id,
@@ -76,14 +74,14 @@ export default function Chat({ session_id }) {
       setMessageLoading(false);
       setMessages((prev) => [
         ...prev,
-        { role: "bot", content: response.data.reply },
+        { role: "assistant", content: response.data.reply },
       ]);
     } catch (error) {
       console.error(error);
       setMessageLoading(false);
       setMessages((prev) => [
         ...prev,
-        { role: "bot", content: "⚠️ Error: could not get response" },
+        { role: "assistant", content: "⚠️ Error: could not get response" },
       ]);
     }
   };
@@ -120,6 +118,8 @@ export default function Chat({ session_id }) {
               px-3 py-2
               mb-2
               break-words
+              justify-center
+              items-center
             `}>
               <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>

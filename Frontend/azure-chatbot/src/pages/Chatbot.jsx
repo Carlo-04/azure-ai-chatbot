@@ -23,7 +23,7 @@ export default function Chatbot() {
   const handleGetSessionsList = async () => {
     try {
       const response = await axios.get(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_get_sessions",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_get_sessions",
         {
           params: { user_id: user.id },
         }
@@ -42,7 +42,7 @@ export default function Chatbot() {
     try {
       setNewSessionLoading(true);
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_create_session",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_create_session",
         {
           user_id: user.id,
           session_title: newSessionTitle,
@@ -72,7 +72,7 @@ export default function Chatbot() {
   const handleDeleteSession = async (target_session_id) => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_delete_session",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_delete_session",
         {
           user_id: user.id,
           session_id: target_session_id,
