@@ -13,16 +13,23 @@ COSMO_DB_URI = os.getenv("COSMO_DB_URI")
 COSMO_DB_PRIMARY_KEY = os.getenv("COSMO_DB_PRIMARY_KEY")
 COSMO_DB_NAME = os.getenv("COSMO_DB_NAME")
 COSMO_DB_CONVERSATIONS_CONTAINER_NAME = os.getenv("COSMO_DB_CONVERSATIONS_CONTAINER_NAME")
+COSMO_DB_SUPPORT_CONTAINER_NAME = os.getenv("COSMO_DB_SUPPORT_CONTAINER_NAME")
 
 # Initialize Cosmos client only when instance is created
 client = CosmosClient(COSMO_DB_URI, credential=COSMO_DB_PRIMARY_KEY)
 database = client.get_database_client(COSMO_DB_NAME)
 container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME)
 
-def initializeContainer():
+def initializeContainer(container_num):
+    # container numbers: Conversations: 0, Support: 1
+
     client = CosmosClient(COSMO_DB_URI, credential=COSMO_DB_PRIMARY_KEY)
     database = client.get_database_client(COSMO_DB_NAME)
-    container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME)
+    match container_num:
+        case 0:
+            container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME) #partition key is userId
+        case 1:
+            container = database.get_container_client(COSMO_DB_SUPPORT_CONTAINER_NAME) #partition key is supportAgentId
     return container
     
 ##################
@@ -34,7 +41,7 @@ def addUser(first_name, last_name, email, password, user_type="user"):
     # Returns None if the email already exists
     # user_type = user || admin
 
-    container = initializeContainer()
+    container = initializeContainer(0)
     query = """
         SELECT c.userId
         FROM c
@@ -76,7 +83,7 @@ def addUser(first_name, last_name, email, password, user_type="user"):
     return id
 
 def isAdmin(user_id):
-    container = initializeContainer()
+    container = initializeContainer(0)
     try:
         user = container.read_item(item=user_id, partition_key=user_id)
         return user.get("documentType") == "user" and user.get("user_type") == "admin"
@@ -84,7 +91,7 @@ def isAdmin(user_id):
         return False
 
 def userIsValid(user_id):
-    container = initializeContainer()
+    container = initializeContainer(0)
     try:
         item = container.read_item(item=user_id, partition_key=user_id)
         return item.get("documentType") == "user"
@@ -96,7 +103,7 @@ def login(email, password):
     Attempt to log in a user by email and password.
     Returns a dictionary with userId and user_type if found, otherwise None.
     """
-    container = initializeContainer()
+    container = initializeContainer(0)
 
     query = """
         SELECT c.userId, c.user_type, c.password
@@ -138,7 +145,7 @@ def addMessage(user_id, session_id, role, content):
         "content": content,
         "sentAt": datetime.now(timezone.utc).isoformat()
     }
-    container = initializeContainer()
+    container = initializeContainer(0)
     container.create_item(body=message)
 
 def addSession(user_id, session_title):
@@ -153,7 +160,7 @@ def addSession(user_id, session_title):
         "sessionTitle": session_title,
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
-    container = initializeContainer()
+    container = initializeContainer(0)
     container.create_item(body=session)
     return session_id
 
@@ -170,7 +177,7 @@ def getSessions(user_id):
             ORDER BY c.createdAt DESC
         """
     
-    container = initializeContainer()    
+    container = initializeContainer(0)    
     sessions = list(container.query_items(
         query=query,
         partition_key=user_id  
@@ -201,7 +208,7 @@ def getMessages(user_id, session_id):
         {"name": "@sessionId", "value": session_id}
     ]
     
-    container = initializeContainer()
+    container = initializeContainer(0)
     messages = list(container.query_items(
         query=query,
         parameters=parameters,
@@ -223,7 +230,7 @@ def deleteSession(user_id, session_id):
         {"name": "@sessionId", "value": session_id}
     ]
 
-    container = initializeContainer()
+    container = initializeContainer(0)
     messages = list(container.query_items(
         query=query_messages,
         parameters=parameters,
@@ -249,7 +256,7 @@ def clearSession(user_id, session_id):
     parameters = [
         {"name": "@sessionId", "value": session_id}
     ]
-    container = initializeContainer()
+    container = initializeContainer(0)
     messages = list(container.query_items(
         query=query_messages,
         parameters=parameters,
@@ -271,10 +278,10 @@ def getOpenSupportRequests():
             ORDER BY c.createdAt ASC
         """
     
-    container = initializeContainer()    
+    container = initializeContainer(1)    
     requests = list(container.query_items(
         query=query,
-        enable_cross_partition_query=True  
+        enable_cross_partition_query=True
     ))
 
     formatted_requests = [
@@ -294,7 +301,7 @@ def getSupportInProgressRequestsByAgent(user_id):
     if not userIsValid(user_id):
         raise ValueError("This user does not exist")
     
-    container = initializeContainer()    
+    container = initializeContainer(1)    
     query = """
             SELECT c.id, c.userId, c.subject, c.description, c.status, c.createdAt
             FROM c 
@@ -308,7 +315,7 @@ def getSupportInProgressRequestsByAgent(user_id):
     requests = list(container.query_items(
         query=query,
         parameters=parameters,
-        enable_cross_partition_query=True  
+        partition_key=user_id
     ))
 
     formatted_requests = [
@@ -329,7 +336,7 @@ def getUserEmail(user_id):
     if not userIsValid(user_id):
         raise ValueError("This user does not exist")
     
-    container = initializeContainer()
+    container = initializeContainer(0)
     user = container.read_item(item=user_id, partition_key=user_id)
     return user.get("email")
 
@@ -349,7 +356,7 @@ def addSupportRequest(user_id, subject, description):
         "supportAgentId": None,  # to be assigned later
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
-    container = initializeContainer()
+    container = initializeContainer(1)
     container.create_item(body=support_request)
     return request_id
 
@@ -358,7 +365,7 @@ def handleSupportRequest(user_id, customer_id, request_id):
     if not userIsValid(user_id) or not userIsValid(customer_id):
         raise ValueError("This user does not exist")
     
-    container = initializeContainer()
+    container = initializeContainer(1)
 
     query_messages = """
             SELECT *
@@ -371,7 +378,7 @@ def handleSupportRequest(user_id, customer_id, request_id):
     requests = list(container.query_items(
         query=query_messages,
         parameters=parameters,
-        partition_key=customer_id
+        enable_cross_partition_query=True
         ))
     if requests:
         request = requests[0]
@@ -391,7 +398,7 @@ def closeSupportRequest(user_id, customer_id, request_id):
     if not userIsValid(user_id) or not userIsValid(customer_id):
         raise ValueError("This user does not exist")
     
-    container = initializeContainer()
+    container = initializeContainer(1)
 
     query_messages = """
             SELECT *
@@ -404,7 +411,7 @@ def closeSupportRequest(user_id, customer_id, request_id):
     requests = list(container.query_items(
         query=query_messages,
         parameters=parameters,
-        partition_key=customer_id
+        partition_key=user_id
         ))
     if requests:
         request = requests[0]

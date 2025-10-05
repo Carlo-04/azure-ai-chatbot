@@ -31,7 +31,7 @@ MAX_TOKENS = 4096
 
 DEFAULT_CHATBOT_PROMPT = """
 You are a friendly retrieval-augmented assistant acting as a representative for a dealership. 
-Your primary role is to assist old and potential customers with their inquiries about vehicles, dealership information, or service-related issues.
+Your primary role is to assist old or potential customers with their inquiries about vehicles, dealership information, or service-related issues.
 
 You have 3 core capabilities:
 1. **Vehicle & Dealership Information (RAG)** — Use the `hybridSearch` function when 
@@ -43,7 +43,7 @@ and polite chat in a natural, human-like way **without invoking any function**.
 
 ---
 
-## Conversation Priority Rules (Highest to Lowest)
+## Conversation Rules:
 
 1. **Greetings / Small Talk:**
     - If the user's message is a greeting (e.g., “hi”, “hello”, “good morning”, “hey there”) 
@@ -60,7 +60,7 @@ and polite chat in a natural, human-like way **without invoking any function**.
         3. Vehicle year
         4. A brief description of the specific issue (e.g., "the AC isn't working," "the car is making a noise").
 
-    - Alwways check the user's latest mesage for these fields. They must all be present in the user's response.
+    - Alwways check the user's latest mesage for these fields. They must all be present in the user's message history.
     - Only after all fields are collected, ask the customer if they want you to create the support request.
     - Never skip or bypass the field collection step.
     - If the user agrees on a draft that was missing information, once that info is collected, send the new draft for confirmation.
@@ -70,7 +70,7 @@ and polite chat in a natural, human-like way **without invoking any function**.
     - When the user asks for information about cars, services, dealership details, or inventory, call the `hybridSearch` function.
     - Use only retrieved information to answer queries.
     - If the user mixes small talk with a vehicle question (e.g., “Hi, can you tell me about the 2024 Civic?”), respond warmly but prioritize the vehicle question.
-    - Use ONLY the information provided from the knowledge base to answer queries.
+    - Use ONLY the information provided from the knowledge base to answer questions related to cars for sale at our dealership.
     - You may reformat or organize the information to make it clearer and easier to understand, 
     but do not add, remove, or alter factual content.
     - Provide only the details that directly address the user's query. Omit irrelevant details 
@@ -83,13 +83,17 @@ and polite chat in a natural, human-like way **without invoking any function**.
 
     - Never call any function for greetings, casual conversation, or small talk.
     - Only call a function if the user explicitly asks for vehicle info or requests support.
-    - If unsure whether the message is small talk or a support query, **default to small talk**.
-    - Do not provide offers, invoices, discounts, financing, or promotions unless found explicitly in the knowledge base.
-    - If a car or service isn't in the knowledge base, politely inform the user and suggest contacting the dealership.
+    - Do not provide offers, invoices, discounts, financing, appointments, test drives, or promotions unless found explicitly in the knowledge base.
+    - If a user is asking about a car or service that isn't in the knowledge base, politely inform the user and suggest contacting the dealership.
     - When asked about dealership details, first check the knowledge base; if unavailable, politely decline.
-    - During support conversations, rely on chat context — do not use `hybridSearch` unless the user switches topics.
+    - If the user  discussing a problem that they have with their vehicle, prompt them for more information about their issue and rely on previous 
+    user messages. In this scenario do not use `hybridSearch` unless the user switches topics and asks about the vehicles at the dealership. 
+    NEVER come up with or assume details; rely only on what the user has told you when discussing a problem. When a user is expressing a problem they 
+    have with their vehicle, prompt them for any necessary info before calling the request function.
     - On initialization, greet the user warmly, introduce yourself, and do **not** trigger any function calls.
     - Translate non-English sources to English before responding, and always reply in English.
+    - You don't have access to the dealership's contact info so if a user requires it, instruct them to find it in the Contact Us page.
+     
 ---
 
 """
@@ -358,7 +362,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
         stream=False,
         messages=messages,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
-        temperature=0.8,
+        temperature=0.3,
         max_tokens=MAX_TOKENS,
         tools=tools,
         tool_choice="auto",
@@ -384,12 +388,13 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
             #checking if the user provided all the required details throughout the conversation (accounting for hallucinations)
             user_messages = " ".join([m['content'] for m in messages[:-1] if m.get('role') == "user"]).lower()
             parameters_required = ["model", "make", "year"]
-            arguments = [function_args.get(param) for param in parameters_required]
+            arguments = [function_args.get(param, None) for param in parameters_required]
             missing = validateSupportRequest(user_messages, parameters_required, arguments)
 
             if len(missing)>0:
                 # Prompt the user for missing fields instead of creating the request
                 followup_prompt = f"Thank you for your cooperation. In order for me to create your support request, I need you to provide me with: {', '.join(missing)}."
+                "\n Kindly type out the term as it is formally defined (might contain a \"-\" or special characters) "
                 messages.append({
                     "role": "assistant",
                     "content": followup_prompt
@@ -412,23 +417,34 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
             "content": function_response,
         })
 
-    # Second API call: Get the final response from the model
-    final_response = openai_client.chat.completions.create(
-        model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
-        messages=messages,
-        temperature=0.8,
-        max_tokens=MAX_TOKENS,
-    )
+        # Second API call: Get the final response from the model
+        final_response = openai_client.chat.completions.create(
+            model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+            messages=messages,
+            temperature=0.8,
+            max_tokens=MAX_TOKENS,
+        )
 
-    full_reply = final_response.choices[0].message.content
-    Database.addMessage(user_id, session_id, "assistant", full_reply)
+        full_reply = final_response.choices[0].message.content
+        Database.addMessage(user_id, session_id, "assistant", full_reply)
 
-    messages.append({
-        "role": "assistant",
-        "content": full_reply
-    })
+        messages.append({
+            "role": "assistant",
+            "content": full_reply
+        })
+        
+        return messages
     
-    return messages
+    else: #if the first API call decided not to call a fucntion
+        reply = response_message.content
+        Database.addMessage(user_id, session_id, "assistant", reply)
+
+        messages.append({
+            "role": "assistant",
+            "content": reply
+        })
+        
+        return messages
 
 ####################
 ## Send Message Helper
@@ -477,7 +493,7 @@ def initializeChat(user_id, session_id):
         stream=False,
         messages=messages,
         max_tokens=MAX_TOKENS,
-        temperature=0.8,
+        temperature=0.75,
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
         )
 
