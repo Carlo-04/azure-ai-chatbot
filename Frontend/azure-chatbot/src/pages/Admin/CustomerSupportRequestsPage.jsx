@@ -17,6 +17,8 @@ export default function CustomerSupportRequestsPage() {
   const [openRequestsList, setOpenRequestsList] = useState([]); //list of unassigned support requests.
   const [openRequestsLoading, setOpenRequestsLoading] = useState(true);
   const [inProgressRequestsList, setInProgressRequestsList] = useState([]); //list of unassigned support requests.
+  const [inProgressRequestsActiveIndex, setInProgressRequestsActiveIndex] =
+    useState(null);
   const [inProgressRequestsLoading, setInProgressRequestsLoading] =
     useState(true);
   const [emailDraftText, setEmailDraftText] = useState("");
@@ -267,7 +269,20 @@ export default function CustomerSupportRequestsPage() {
             )}
           {inProgressRequestsLoading && <LoadingSpinner />}
           {inProgressRequestsList.length > 0 && !inProgressRequestsLoading && (
-            <Accordion>{createAgentRequestsTabs()}</Accordion>
+            <Accordion
+              activeIndex={inProgressRequestsActiveIndex}
+              onTabChange={(e) => {
+                setInProgressRequestsActiveIndex(e.index);
+                setEmailDraftHtml("");
+                setEmailDraftText("");
+              }}
+              onTabClose={() => {
+                setInProgressRequestsActiveIndex(null);
+                setEmailDraftHtml("");
+                setEmailDraftText("");
+              }}>
+              {createAgentRequestsTabs()}
+            </Accordion>
           )}
         </div>
       </div>
@@ -281,17 +296,7 @@ export default function CustomerSupportRequestsPage() {
           )}
           {openRequestsLoading && <LoadingSpinner />}
           {openRequestsList.length > 0 && !openRequestsLoading && (
-            <Accordion
-              onTabChange={() => {
-                setEmailDraftHtml("");
-                setEmailDraftText("");
-              }}
-              onTabClose={() => {
-                setEmailDraftHtml("");
-                setEmailDraftText("");
-              }}>
-              {createOpenRequestsTabs()}
-            </Accordion>
+            <Accordion>{createOpenRequestsTabs()}</Accordion>
           )}
         </div>
       </div>
