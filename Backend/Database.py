@@ -1,6 +1,8 @@
 from azure.cosmos import CosmosClient, PartitionKey
 from azure.identity import DefaultAzureCredential
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from azure.communication.email import EmailClient
+from azure.core.credentials import AzureKeyCredential
 
 import uuid
 from datetime import datetime, timezone
@@ -15,10 +17,9 @@ COSMO_DB_NAME = os.getenv("COSMO_DB_NAME")
 COSMO_DB_CONVERSATIONS_CONTAINER_NAME = os.getenv("COSMO_DB_CONVERSATIONS_CONTAINER_NAME")
 COSMO_DB_SUPPORT_CONTAINER_NAME = os.getenv("COSMO_DB_SUPPORT_CONTAINER_NAME")
 
-# Initialize Cosmos client only when instance is created
-client = CosmosClient(COSMO_DB_URI, credential=COSMO_DB_PRIMARY_KEY)
-database = client.get_database_client(COSMO_DB_NAME)
-container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME)
+AZURE_COMMUNICATION_ENDPOINT = os.getenv("AZURE_COMMUNICATION_ENDPOINT")
+AZURE_COMMUNICATION_API_KEY = os.getenv("AZURE_COMMUNICATION_API_KEY")
+
 
 def initializeContainer(container_num):
     # container numbers: Conversations: 0, Support: 1
@@ -97,6 +98,14 @@ def userIsValid(user_id):
         return item.get("documentType") == "user"
     except CosmosResourceNotFoundError:
         return False
+    
+def getUserInfo(user_id):
+    if not userIsValid(user_id):
+        raise ValueError("This user does not exist")
+    
+    container = initializeContainer(0)
+    user = container.read_item(item=user_id, partition_key=user_id)
+    return user
 
 def login(email, password):
     """
@@ -419,3 +428,33 @@ def closeSupportRequest(user_id, customer_id, request_id):
         container.replace_item(item=request["id"], body=request)
     else:
         raise ValueError("This request does not exist anymore.")
+    
+def sendEmail(user_id, recipient_id, subject, body_text, body_html):
+    if not userIsValid(user_id) or not userIsValid(recipient_id):
+        raise ValueError("This user does not exist")
+    
+    sender_email = "DoNotReply@a4a02730-2bef-46ed-beaa-64e5c3ed0fc9.azurecomm.net"
+    recipient_info = getUserInfo(recipient_id)
+    rec_email = recipient_info.get("email")
+    rec_fname = recipient_info.get("firstName")
+    rec_lname = recipient_info.get("lastName")
+    email_client = EmailClient(endpoint=AZURE_COMMUNICATION_ENDPOINT, credential=AzureKeyCredential(AZURE_COMMUNICATION_API_KEY))
+
+    message = {
+        "content": {
+            "subject": subject,
+            "plainText": body_text,
+            "html": body_html
+        },
+        "recipients": {
+            "to": [
+                {
+                    "address": rec_email,
+                    "displayName": f"{rec_fname} {rec_lname}"
+                }
+            ]
+        },
+        "senderAddress": sender_email
+    }   
+    poller = email_client.begin_send(message)
+    return poller.result()

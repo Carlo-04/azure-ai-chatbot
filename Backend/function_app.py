@@ -891,3 +891,49 @@ def CustomerCloseSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json"
         )
+    
+
+#
+#########  Close Support Request  #################
+#
+@app.function_name(name="SendEmail")
+@app.route(route="customer_support_send_email", methods=["POST"])
+def CustomerSendEmail(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        req_body = req.get_json()
+        user_id = req_body.get("user_id") #admin id
+        recipient_id = req_body.get("recipient_id")
+        subject = req_body.get("subject")
+        body_text = req_body.get("body_text")
+        body_html = req_body.get("body_html")
+
+        if  any(param is None for param in [user_id, recipient_id, subject, body_text, body_html]):
+            return func.HttpResponse(
+                json.dumps({"error": "user_id, recipient_id, subject, body_text, and body_html are required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not Database.isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        Database.sendEmail(user_id, recipient_id, subject, body_text, body_html)
+
+        return func.HttpResponse(
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in sendEmail HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )

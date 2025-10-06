@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Accordion, AccordionTab } from "primereact/accordion";
+import { Editor } from "primereact/editor";
 
 import { useUser } from "../../contexts/UserContext";
 import LoadingSpinner from "../../components/LoadingSpinner";
@@ -18,6 +19,11 @@ export default function CustomerSupportRequestsPage() {
   const [inProgressRequestsList, setInProgressRequestsList] = useState([]); //list of unassigned support requests.
   const [inProgressRequestsLoading, setInProgressRequestsLoading] =
     useState(true);
+  const [emailDraftText, setEmailDraftText] = useState("");
+  const [emailDraftHtml, setEmailDraftHtml] = useState("");
+
+  const [draftingEmail, setDraftingEmail] = useState(false); //toggles the editor to write the email
+  const [sendingEmail, setSendingEmail] = useState(false);
   const { user } = useUser();
 
   ////////////
@@ -126,6 +132,39 @@ export default function CustomerSupportRequestsPage() {
       }
     }
   };
+
+  const handleSendEmail = async (customer_id) => {
+    try {
+      setSendingEmail(true);
+      const response = await axios.post(
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/customer_support_send_email",
+        {
+          user_id: user.id,
+          recipient_id: customer_id,
+          subject: "Dealership Customer Support",
+          body_text: emailDraftText,
+          body_html: emailDraftHtml,
+        }
+      );
+      setSendingEmail(false);
+      setEmailDraftHtml("");
+      setEmailDraftText("");
+      alert("Email Sent Successfully");
+    } catch (error) {
+      if (error.response) {
+        console.error("Error:", error.response.data);
+        alert(
+          "An error occurred: " +
+            (error.response.data.error || "Please try again.")
+        );
+      } else {
+        console.error("Request failed:", error.message);
+        alert(
+          "Request failed. Please check your network connection and try again."
+        );
+      }
+    }
+  };
   useEffect(() => {
     handleGetOpenRequests();
     handleGetInProgressRequests();
@@ -176,11 +215,6 @@ export default function CustomerSupportRequestsPage() {
               <div className="flex flex-row gap-2">
                 <button
                   className="bg-bg-secondary hover:bg-bg-tertiary text-text-primary"
-                  onClick={() => {}}>
-                  Email User
-                </button>
-                <button
-                  className="bg-bg-secondary hover:bg-bg-tertiary text-text-primary"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCloseRequest(request.request_id, request.user_id, i);
@@ -191,7 +225,31 @@ export default function CustomerSupportRequestsPage() {
             </div>
           )}
           disabled={request.disabled}>
-          {request.description}
+          <div className="flex flex-row justify-between">
+            <div className="flex flex-1">{request.description}</div>
+            <div className="flex flex-1 flex-col gap-3 justify-center items-center">
+              <div>
+                <Editor
+                  value={emailDraftHtml}
+                  onTextChange={(e) => {
+                    setEmailDraftHtml(e.htmlValue);
+                    setEmailDraftText(e.textValue);
+                  }}
+                  className="max-h-100 overflow-auto"
+                />
+              </div>
+              <div>
+                <button
+                  className="bg-bg-secondary hover:bg-bg-tertiary text-text-primary"
+                  onClick={() => {
+                    handleSendEmail(request.user_id);
+                  }}>
+                  {sendingEmail && "Sending..."}
+                  {!sendingEmail && "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
         </AccordionTab>
       );
     });
@@ -200,7 +258,7 @@ export default function CustomerSupportRequestsPage() {
     <div>
       <div className="p-4">
         <h1>Your Ongoing Requests</h1>
-        <div className="mt-4 rounded-2xl p-4 bg-bg-secondary h-1/3 overflow-auto items-center justify-center">
+        <div className="mt-4 rounded-2xl p-4 bg-bg-secondary items-center justify-center">
           {inProgressRequestsList.length === 0 &&
             !inProgressRequestsLoading && (
               <div className="text-text-secondary w-full text-center">
@@ -215,7 +273,7 @@ export default function CustomerSupportRequestsPage() {
       </div>
       <div className="p-4">
         <h1>Open Support Requests</h1>
-        <div className="mt-4 rounded-2xl p-4 bg-bg-secondary max-h-1/3 overflow-auto items-center justify-center">
+        <div className="mt-4 rounded-2xl p-4 bg-bg-secondary  overflow-auto items-center justify-center">
           {openRequestsList.length === 0 && !openRequestsLoading && (
             <div className="h-5 text-text-secondary w-full text-center">
               There are no open requests available.
@@ -223,7 +281,17 @@ export default function CustomerSupportRequestsPage() {
           )}
           {openRequestsLoading && <LoadingSpinner />}
           {openRequestsList.length > 0 && !openRequestsLoading && (
-            <Accordion>{createOpenRequestsTabs()}</Accordion>
+            <Accordion
+              onTabChange={() => {
+                setEmailDraftHtml("");
+                setEmailDraftText("");
+              }}
+              onTabClose={() => {
+                setEmailDraftHtml("");
+                setEmailDraftText("");
+              }}>
+              {createOpenRequestsTabs()}
+            </Accordion>
           )}
         </div>
       </div>
