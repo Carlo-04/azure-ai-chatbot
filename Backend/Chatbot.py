@@ -93,6 +93,7 @@ and polite chat in a natural, human-like way **without invoking any function**.
     - On initialization, greet the user warmly, introduce yourself, and do **not** trigger any function calls.
     - Translate non-English sources to English before responding, and always reply in English.
     - You don't have access to the dealership's contact info so if a user requires it, instruct them to find it in the Contact Us page.
+    - You may only call one function at a time.
      
 ---
 
@@ -373,49 +374,46 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 
     # Handle function calls
     if response_message.tool_calls:
-        # for tool_call in response_message.tool_calls:
-        #     function_name = tool_call.function.name
-        #     function_args = json.loads(tool_call.function.arguments)
-        tool_call = response_message.tool_calls[0]  
-        function_name = tool_call.function.name
-        function_args = json.loads(tool_call.function.arguments)
-        
-        if function_name == "hybridSearch":
-            function_response = hybridSearch(
-                query=function_args.get("query")
-            )
-        elif function_name == "createSupportRequest":
-            #checking if the user provided all the required details throughout the conversation (accounting for hallucinations)
-            user_messages = " ".join([m['content'] for m in messages[:-1] if m.get('role') == "user"]).lower()
-            parameters_required = ["model", "make", "year"]
-            arguments = [function_args.get(param, None) for param in parameters_required]
-            missing = validateSupportRequest(user_messages, parameters_required, arguments)
-
-            if len(missing)>0:
-                # Prompt the user for missing fields instead of creating the request
-                followup_prompt = f"Thank you for your cooperation. In order for me to create your support request, I need you to provide me with: {', '.join(missing)}."
-                "\n Kindly type out the term as it is formally defined (might contain a \"-\" or special characters) "
-                messages.append({
-                    "role": "assistant",
-                    "content": followup_prompt
-                })
-                Database.addMessage(user_id, session_id, "assistant", followup_prompt)
-                return messages
-            else:
-                function_response = createSupportRequest(
-                    user_id=user_id,
-                    subject=function_args.get("subject"),
-                    description=function_args.get("description")
+        for tool_call in response_message.tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
+            
+            if function_name == "hybridSearch":
+                function_response = hybridSearch(
+                    query=function_args.get("query")
                 )
-        else:
-            function_response = json.dumps({"error": "Unknown function"})
-        
-        messages.append({
-            "tool_call_id": tool_call.id,
-            "role": "tool",
-            "name": function_name,
-            "content": function_response,
-        })
+            elif function_name == "createSupportRequest":
+                #checking if the user provided all the required details throughout the conversation (accounting for hallucinations)
+                user_messages = " ".join([m['content'] for m in messages[:-1] if m.get('role') == "user"]).lower()
+                parameters_required = ["model", "make", "year"]
+                arguments = [function_args.get(param, None) for param in parameters_required]
+                missing = validateSupportRequest(user_messages, parameters_required, arguments)
+
+                if len(missing)>0:
+                    # Prompt the user for missing fields instead of creating the request
+                    followup_prompt = f"Thank you for your cooperation. In order for me to create your support request, I need you to provide me with: {', '.join(missing)}."
+                    "\n Kindly type out the term as it is formally defined (might contain a \"-\" or special characters) "
+                    messages.append({
+                        "role": "assistant",
+                        "content": followup_prompt
+                    })
+                    Database.addMessage(user_id, session_id, "assistant", followup_prompt)
+                    return messages
+                else:
+                    function_response = createSupportRequest(
+                        user_id=user_id,
+                        subject=function_args.get("subject"),
+                        description=function_args.get("description")
+                    )
+            else:
+                function_response = json.dumps({"error": "Unknown function"})
+            
+            messages.append({
+                "tool_call_id": tool_call.id,
+                "role": "tool",
+                "name": function_name,
+                "content": function_response,
+            })
 
         # Second API call: Get the final response from the model
         final_response = openai_client.chat.completions.create(
