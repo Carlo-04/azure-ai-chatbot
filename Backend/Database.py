@@ -152,7 +152,7 @@ def addMessage(user_id, session_id, role, content):
         "documentType": "message",
         "role": role,             # "user" or "assistant"
         "content": content,
-        "sentAt": datetime.now(timezone.utc).isoformat()
+        "createdAt": datetime.now(timezone.utc).isoformat()
     }
     container = initializeContainer(0)
     container.create_item(body=message)
@@ -210,7 +210,7 @@ def getMessages(user_id, session_id):
             SELECT c.role, c.content 
             FROM c 
             WHERE c.documentType="message" AND c.sessionId=@sessionId
-            ORDER BY c.sentAt ASC
+            ORDER BY c.createdAt ASC
         """
         
     parameters = [
