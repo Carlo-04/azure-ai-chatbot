@@ -75,7 +75,7 @@ def addUser(first_name, last_name, email, password, user_type="user"):
         "firstName": first_name,
         "lastName": last_name,
         "documentType": "user",
-        "user_type": user_type,
+        "userType": user_type,
         "email": email,
         "password": hashed_password,
         "createdAt": datetime.now(timezone.utc).isoformat()
@@ -87,7 +87,7 @@ def isAdmin(user_id):
     container = initializeContainer(0)
     try:
         user = container.read_item(item=user_id, partition_key=user_id)
-        return user.get("documentType") == "user" and user.get("user_type") == "admin"
+        return user.get("documentType") == "user" and user.get("userType") == "admin"
     except CosmosResourceNotFoundError:
         return False
 
@@ -110,12 +110,12 @@ def getUserInfo(user_id):
 def login(email, password):
     """
     Attempt to log in a user by email and password.
-    Returns a dictionary with userId and user_type if found, otherwise None.
+    Returns a dictionary with userId and userType if found, otherwise None.
     """
     container = initializeContainer(0)
 
     query = """
-        SELECT c.userId, c.user_type, c.password
+        SELECT c.userId, c.userType, c.password
         FROM c
         WHERE c.documentType="user" AND c.email=@email
         """
@@ -133,7 +133,7 @@ def login(email, password):
     #comparing the passwords
     if results and bcrypt.checkpw(password.encode('utf-8'), results[0]["password"].encode('utf-8')):
         # Return the first match (there should only be one)
-        return {"userId": results[0]["userId"], "user_type": results[0]["user_type"]}
+        return {"userId": results[0]["userId"], "userType": results[0]["userType"]}
 
     return None
 

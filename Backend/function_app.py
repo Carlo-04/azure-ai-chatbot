@@ -66,7 +66,7 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
 
         if user:
             return func.HttpResponse(
-                json.dumps({"userId": user["userId"], "userType": user["user_type"]}),
+                json.dumps({"userId": user["userId"], "userType": user["userType"]}),
                 status_code=200,
                 mimetype="application/json"
             )
