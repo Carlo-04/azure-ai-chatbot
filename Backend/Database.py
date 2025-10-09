@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import os
 import bcrypt
 
+import Container
 
 
 COSMO_DB_URI = os.getenv("COSMO_DB_URI")
@@ -20,6 +21,7 @@ COSMO_DB_SUPPORT_CONTAINER_NAME = os.getenv("COSMO_DB_SUPPORT_CONTAINER_NAME")
 AZURE_COMMUNICATION_ENDPOINT = os.getenv("AZURE_COMMUNICATION_ENDPOINT")
 AZURE_COMMUNICATION_API_KEY = os.getenv("AZURE_COMMUNICATION_API_KEY")
 
+AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME")
 
 def initializeContainer(container_num):
     # container numbers: Conversations: 0, Support: 1
@@ -140,8 +142,9 @@ def login(email, password):
 ##################
 ## Chatbot Functions
 ################
-    
-def addMessage(user_id, session_id, role, content):
+
+def addMessage(user_id, session_id, message_type, role, content):
+    # message_type: "text" or "image"
     if not userIsValid(user_id):
         raise ValueError("This user does not exist")
     
@@ -150,12 +153,14 @@ def addMessage(user_id, session_id, role, content):
         "userId": user_id,        # partition key
         "sessionId": session_id,
         "documentType": "message",
+        "messageType": message_type,
         "role": role,             # "user" or "assistant"
         "content": content,
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
     container = initializeContainer(0)
     container.create_item(body=message)
+
 
 def addSession(user_id, session_title):
     if not userIsValid(user_id):
@@ -229,7 +234,8 @@ def deleteSession(user_id, session_id):
     if not userIsValid(user_id):
         raise ValueError("This user does not exist")
     
-    # Delete all messages associated with the session
+
+    # Delete all session's messages from the database
     query_messages = """
             SELECT c.id 
             FROM c 
@@ -249,8 +255,12 @@ def deleteSession(user_id, session_id):
     for message in messages:
         container.delete_item(item=message['id'], partition_key=user_id)
     
-    # Delete the session itself
+    #delete session itself
     container.delete_item(item=session_id, partition_key=user_id)
+
+    #delete all media stored on the storage account (deleting the session directory in the container)
+    Container.deleteContainerDirectory(AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME, session_id)
+
 
 def clearSession(user_id, session_id):
     if not userIsValid(user_id):
@@ -274,6 +284,9 @@ def clearSession(user_id, session_id):
     
     for message in messages:
         container.delete_item(item=message['id'], partition_key=user_id)
+
+    #delete all media stored on the storage account (deleting the session directory in the container)
+    Container.deleteContainerDirectory(AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME, session_id)
 
 
 #############
