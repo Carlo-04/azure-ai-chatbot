@@ -13,7 +13,8 @@ import re
 import base64
 import uuid
 
-import Database
+import ChatDb
+import CustomerServiceDb as SupportDb
 import Container
 
 # Retrieve environment variables
@@ -31,10 +32,11 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
-MAX_TOKENS = 4096
 AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME")
-IMAGE_GEN_SIZES = ['1024x1024', '1792x1024', '1024x1792']
 
+MAX_TOKENS = 4096
+IMAGE_GEN_SIZES = ['1024x1024', '1792x1024', '1024x1792']
+IMAGE_GEN_QUOTA = 3
 DEFAULT_CHATBOT_PROMPT = """
 You are a friendly retrieval-augmented assistant acting as a representative for a dealership. 
 Your primary role is to assist old or potential customers with their inquiries about vehicles, dealership information, or service-related issues.
@@ -90,6 +92,8 @@ and polite chat in a natural, human-like way **without invoking any function**.
     - Using the prompts sent to you by the user, generate a detailed description of the image to be generated and call the function.
     - Only generate images which depict vehicles.
     - Only generate images which are appropriate and don't contain any obscene aspects. 
+    - Users are limited to 3 generated images per session. If the message history already includes 3 images, 
+    inform the user that they're reached their limit and that you're unable generate an image.
 ---
 
 ## Behavioral Guidelines
@@ -142,10 +146,6 @@ TOOLS = [
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "user_id": {
-                            "type": "string",
-                            "description": "The id of the user issuing the support request. This will be passed from the backend. you don't have access to it directly.",
-                        },
                         "subject": {
                             "type": "string",
                             "description": "This is a title (a brief sentence) summarizing the user's issue. You generate it from the conversation.",
@@ -173,7 +173,6 @@ TOOLS = [
             }
         },
         {
-
             "type": "function",
             "function": {
                 "name": "generateImage",
@@ -183,14 +182,6 @@ TOOLS = [
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "user_id": {
-                            "type": "string",
-                            "description": "The id of the user issuing the support request. This will be passed from the backend. you don't have access to it directly.",
-                        },
-                        "session_id": {
-                            "type": "string",
-                            "description": "The id of the session in which the image is being requested. This will be passed from the backend. you don't have access to it directly.",
-                        },
                         "text_prompt": {
                             "type": "string",
                             "description": "A description provided by the user of how the image should look like or what it should contain. "
@@ -207,6 +198,8 @@ TOOLS = [
             }
         }
     ]
+
+
 ####################
 ## Client Initialization
 ####################
@@ -360,7 +353,7 @@ def createSupportRequest(user_id, subject, description):
     #This function is used to create a customer support request
     #It stores the request in the database and returns a confirmation message
     
-    request_id = Database.addSupportRequest(user_id, subject, description)
+    request_id = SupportDb.addSupportRequest(user_id, subject, description)
     return json.dumps({"request_id": request_id, "status": "Support request created successfully."})
 
 ####################
@@ -430,7 +423,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 
 
     #add the user query
-    Database.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
+    ChatDb.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
 
     query = messages[-1]['content']
     latest_message = messages[-1]
@@ -479,7 +472,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                         "role": "assistant",
                         "content": followup_prompt
                     })
-                    Database.addMessage(user_id, session_id, "text", "assistant", followup_prompt)
+                    ChatDb.addMessage(user_id, session_id, "text", "assistant", followup_prompt)
                     return messages
                 else:
                     function_response = createSupportRequest(
@@ -488,12 +481,28 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                         description=function_args.get("description")
                     )
             elif function_name == "generateImage":
+                #verifying if the image generation limit has been reached
+                image_count = 0
+                for msg in messages[:-1]:
+                    if not isinstance(msg["content"], str):
+                        image_count += 1
+
+                # If the quota has been met
+                if image_count >= 3:
+                    messages.append({
+                        "role": "assistant",
+                        "content": f"I am unable to generate any more images. You've already met your quota: {IMAGE_GEN_QUOTA} images per session."
+                    })
+                    ChatDb.addMessage(user_id, session_id, "text", "assistant", followup_prompt)
+                    return messages
+                
+                #interpreting image size
                 index = function_args.get("size_index")
                 if (index >= len(IMAGE_GEN_SIZES) or index < 0):
                     index = 0
 
                 image_sas_url = generateImage(user_id, session_id, function_args.get("text_prompt"), index)
-                Database.addMessage(user_id, session_id, "image", "user", [{"type": "image_url", "image_url": {"url": image_sas_url}}])
+                ChatDb.addMessage(user_id, session_id, "image", "user", [{"type": "image_url", "image_url": {"url": image_sas_url}}])
                 messages.append({
                         "role": "user",
                         "content": [{"type": "image_url", "image_url": {"url": image_sas_url}}]
@@ -519,7 +528,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
         )
 
         full_reply = final_response.choices[0].message.content
-        Database.addMessage(user_id, session_id, "text", "assistant", full_reply)
+        ChatDb.addMessage(user_id, session_id, "text", "assistant", full_reply)
 
         messages.append({
             "role": "assistant",
@@ -530,7 +539,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
     
     else: #if the first API call decided not to call a fucntion
         reply = response_message.content
-        Database.addMessage(user_id, session_id, "text", "assistant", reply)
+        ChatDb.addMessage(user_id, session_id, "text", "assistant", reply)
 
         messages.append({
             "role": "assistant",
@@ -545,7 +554,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 def sendMessageHelper(user_id, session_id, query):
     
     openai_client, search_client = initializeClients()
-    messages = Database.getMessages(user_id=user_id, session_id=session_id)
+    messages = ChatDb.getMessages(user_id=user_id, session_id=session_id)
 
     messages.append({
         "role": "user",
@@ -592,8 +601,8 @@ def initializeChat(user_id, session_id):
 
     full_reply = response.choices[0].message.content
 
-    Database.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
-    Database.addMessage(user_id, session_id, "text", "assistant", full_reply)
+    ChatDb.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
+    ChatDb.addMessage(user_id, session_id, "text", "assistant", full_reply)
 
     messages.append({
         "role": "assistant",
@@ -605,14 +614,14 @@ def initializeChat(user_id, session_id):
 
 
 def listMessages(user_id, session_id):
-        return Database.getMessages(user_id=user_id, session_id=session_id)
+        return ChatDb.getMessages(user_id=user_id, session_id=session_id)
 
 ###################
 ## Create Session
 ###################
 def createSession(user_id, session_name):
 
-    new_session_id = Database.addSession(user_id, session_name)
+    new_session_id = ChatDb.addSession(user_id, session_name)
     initializeChat(user_id, new_session_id)
     return new_session_id
 
@@ -622,7 +631,7 @@ def createSession(user_id, session_name):
 ###################
 def clearChat(user_id, session_id):
 
-    Database.clearSession(user_id=user_id, session_id=session_id)
+    ChatDb.clearSession(user_id=user_id, session_id=session_id)
     messages = initializeChat(user_id, session_id)
     return messages
 
@@ -671,7 +680,7 @@ def generateAudio(text):
 
     endpoint = os.getenv("AZURE_TEXT_TO_SPEECH_ENDPOINT")
     speech_config = speechsdk.SpeechConfig(subscription=AZURE_OPENAI_API_KEY, 
-                                           endpoint=endpoint)
+                                        endpoint=endpoint)
     speech_config.speech_synthesis_voice_name = "en-US-BrandonMultilingualNeural"
     
     speech_config.set_speech_synthesis_output_format(

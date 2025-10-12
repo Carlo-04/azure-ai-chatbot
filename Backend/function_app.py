@@ -6,7 +6,9 @@ import os
 
 import Chatbot
 import AISearch
-import Database
+from UsersDb import isAdmin, login
+import ChatDb
+import CustomerServiceDb as supportDb
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -30,7 +32,7 @@ def httpUserIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        is_admin = Database.isAdmin(user_id)
+        is_admin = isAdmin(user_id)
         return func.HttpResponse(
             json.dumps({"isAdmin": is_admin}),
             status_code=200,
@@ -62,7 +64,7 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
 
-        user = Database.login(email=username, password=password)
+        user = login(email=username, password=password)
 
         if user:
             return func.HttpResponse(
@@ -143,7 +145,7 @@ def chatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        sessions = Database.getSessions(user_id)
+        sessions = ChatDb.getSessions(user_id)
 
         #{"session_id": ..., "session_title": ...}
         return func.HttpResponse(
@@ -215,7 +217,7 @@ def chatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        Database.deleteSession(user_id, session_id)
+        ChatDb.deleteSession(user_id, session_id)
 
         return func.HttpResponse(
             status_code=200,
@@ -379,7 +381,7 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -422,7 +424,7 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -463,7 +465,7 @@ def httpAISearchGetKeyField(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -508,7 +510,7 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -608,7 +610,7 @@ def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
         if not files:
             return func.HttpResponse("No files uploaded", status_code=400)
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -648,7 +650,7 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -690,7 +692,7 @@ def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
@@ -735,14 +737,14 @@ def CustomerSupportListOpenRequests(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
-        requests = Database.getOpenSupportRequests()
+        requests = supportDb.getOpenSupportRequests()
         
         return func.HttpResponse(
             json.dumps({"open_requests": requests}, ensure_ascii=False).encode('utf-8'),
@@ -777,14 +779,14 @@ def CustomerSupportListInProgressRequestsByAgent(req: func.HttpRequest) -> func.
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
-        requests = Database.getSupportInProgressRequestsByAgent(user_id)
+        requests = supportDb.getSupportInProgressRequestsByAgent(user_id)
         
         return func.HttpResponse(
             json.dumps({"in_progress_requests": requests}, ensure_ascii=False).encode('utf-8'),
@@ -820,14 +822,14 @@ def CustomerHandleSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
-        results = Database.handleSupportRequest(user_id, customer_id,request_id)
+        results = supportDb.handleSupportRequest(user_id, customer_id,request_id)
 
         if results == -1:
             return func.HttpResponse(
@@ -870,14 +872,14 @@ def CustomerCloseSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
-        Database.closeSupportRequest(user_id, customer_id,request_id)
+        supportDb.closeSupportRequest(user_id, customer_id,request_id)
 
         return func.HttpResponse(
             status_code=200,
@@ -916,14 +918,14 @@ def CustomerSendEmail(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        if not Database.isAdmin(user_id):
+        if not isAdmin(user_id):
             return func.HttpResponse(
                 json.dumps({"error": "This function can only be executed by an admin user"}),
                 status_code=400,
                 mimetype="application/json"
             )
         
-        Database.sendEmail(user_id, recipient_id, subject, body_text, body_html)
+        supportDb.sendEmail(user_id, recipient_id, subject, body_text, body_html)
 
         return func.HttpResponse(
             status_code=200,
