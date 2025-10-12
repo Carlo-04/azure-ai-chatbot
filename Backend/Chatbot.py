@@ -10,14 +10,19 @@ import json
 import os
 import requests
 import re
+import base64
+import uuid
 
-import Database
+import ChatDb
+import CustomerServiceDb as SupportDb
+import Container
 
 # Retrieve environment variables
 # global AZURE_FOUNDRY_ENDPOINT, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_MODEL_NAME, AZURE_OPENAI_CHAT_DEPLOYMENT_NAME, AZURE_OPENAI_API_VERSION
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_MODEL_NAME = os.getenv("AZURE_OPENAI_MODEL_NAME")
 AZURE_OPENAI_CHAT_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME")
+AZURE_OPENAI_IMAGE_GEN_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_IMAGE_GEN_DEPLOYMENT_NAME")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 AZURE_AI_FOUNDRY_ENDPOINT = os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
@@ -27,8 +32,11 @@ AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY")
 AZURE_SEARCH_INDEX_NAME = os.getenv("AZURE_SEARCH_INDEX_NAME")
 
-MAX_TOKENS = 4096
+AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME")
 
+MAX_TOKENS = 4096
+IMAGE_GEN_SIZES = ['1024x1024', '1792x1024', '1024x1792']
+IMAGE_GEN_QUOTA = 3
 DEFAULT_CHATBOT_PROMPT = """
 You are a friendly retrieval-augmented assistant acting as a representative for a dealership. 
 Your primary role is to assist old or potential customers with their inquiries about vehicles, dealership information, or service-related issues.
@@ -38,7 +46,8 @@ You have 3 core capabilities:
 the user asks questions about vehicles, dealership locations, hours, or services.
 2. **Customer Support Requests** — Use the `createSupportRequest` function only when 
 the user clearly describes a problem or issue they are facing with their vehicle or dealership services.
-3. **Natural Conversation & Small Talk** — Respond to greetings, casual conversation, 
+3. **Image Generation** — Use the `generateImage` function to generate an image according to the user's description.
+4. **Natural Conversation & Small Talk** — Respond to greetings, casual conversation, 
 and polite chat in a natural, human-like way **without invoking any function**.
 
 ---
@@ -76,13 +85,20 @@ and polite chat in a natural, human-like way **without invoking any function**.
     - Provide only the details that directly address the user's query. Omit irrelevant details 
     unless the user explicitly requests them.
 
-
+4. **Image Generation: **
+    - When the user asks you to generate an image of a certain vehicle in a certain environment or scene call the `generateImage` function.
+    - This function is meant to illustrate the vehicles being used outside of the dealership and it's meant to show the users how the car can look with different colors.
+    - This helps users choose a color for their car.
+    - Using the prompts sent to you by the user, generate a detailed description of the image to be generated and call the function.
+    - Only generate images which depict vehicles.
+    - Only generate images which are appropriate and don't contain any obscene aspects. 
+    - Users are limited to 3 generated images per session. If the message history already includes 3 images, 
+    inform the user that they're reached their limit and that you're unable generate an image.
 ---
 
 ## Behavioral Guidelines
 
-    - Never call any function for greetings, casual conversation, or small talk.
-    - Only call a function if the user explicitly asks for vehicle info or requests support.
+    - Only call a function if the user is requesting a task that meets the functions' descriptions.
     - Do not provide offers, invoices, discounts, financing, appointments, test drives, or promotions unless found explicitly in the knowledge base.
     - If a user is asking about a car or service that isn't in the knowledge base, politely inform the user and suggest contacting the dealership.
     - When asked about dealership details, first check the knowledge base; if unavailable, politely decline.
@@ -90,7 +106,7 @@ and polite chat in a natural, human-like way **without invoking any function**.
     user messages. In this scenario do not use `hybridSearch` unless the user switches topics and asks about the vehicles at the dealership. 
     NEVER come up with or assume details; rely only on what the user has told you when discussing a problem. When a user is expressing a problem they 
     have with their vehicle, prompt them for any necessary info before calling the request function.
-    - On initialization, greet the user warmly, introduce yourself, and do **not** trigger any function calls.
+    - On initialization, greet the user warmly, introduce yourself, discuss your capabilities, and do **not** trigger any function calls.
     - Translate non-English sources to English before responding, and always reply in English.
     - You don't have access to the dealership's contact info so if a user requires it, instruct them to find it in the Contact Us page.
     - You may only call one function at a time.
@@ -98,6 +114,91 @@ and polite chat in a natural, human-like way **without invoking any function**.
 ---
 
 """
+
+TOOLS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "hybridSearch",
+                "description": "Performs hybrid search on the search index to retrieve relevant documents. Useful for when you need to find relevant information in the knowledge base to answer the query.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The user prompt that was sent to the chat completion model. It the last user message.",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            }
+        },        
+        {
+            "type": "function",
+            "function": {
+                "name": "createSupportRequest",
+                "description": """
+                Creates a customer support request in the database.
+                Useful for when the user wants to create a support request regarding an issue they are facing.
+                If you don't have enough information to assist the user or if the user needs actual physical assistance,
+                you should create a support request by calling this function.
+                """,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "subject": {
+                            "type": "string",
+                            "description": "This is a title (a brief sentence) summarizing the user's issue. You generate it from the conversation.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A detailed description of the user's issue (under 120 words). You generate it from the user message history. "
+                            "It should include the vehicle make, model, year, and issue description EXACTLY as provided by the customer (no added details).",
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "This is the model of the vehicle owned by the user.",
+                        },
+                        "make": {
+                            "type": "string",
+                            "description": "This is the make of the vehicle owned by the user.",
+                        },
+                        "year": {
+                            "type": "string",
+                            "description": "This is the year of the vehicle owned by the user",
+                        },
+                    },
+                    "required": ["subject", "description"],
+                },
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generateImage",
+                "description": """
+                Calls an image generate model and generates an image according to a text description.
+                """,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text_prompt": {
+                            "type": "string",
+                            "description": "A description provided by the user of how the image should look like or what it should contain. "
+                            "It can include, objects, enviromental elements, background details, etc.",
+                        },
+                        "size_index": {
+                            "type": "integer",
+                            "description": "This represents the resolution of the image to be generated. "
+                            "The value of this argument needs to be 0, 1 or 2, representing the index of the following resolutions: ['1024x1024', '1792x1024', '1024x1792']",
+                        },
+                    },
+                    "required": ["text_prompt", "size_index"],
+                },
+            }
+        }
+    ]
+
 
 ####################
 ## Client Initialization
@@ -126,7 +227,8 @@ def num_tokens_from_messages(messages):
     for message in messages:
         num_tokens += 4  # every message overhead
         for key, value in message.items():
-            num_tokens += len(encoding.encode(value))
+            if isinstance(value, str):
+                num_tokens += len(encoding.encode(value))
     num_tokens += 2  # every reply overhead
     return num_tokens
 
@@ -251,7 +353,7 @@ def createSupportRequest(user_id, subject, description):
     #This function is used to create a customer support request
     #It stores the request in the database and returns a confirmation message
     
-    request_id = Database.addSupportRequest(user_id, subject, description)
+    request_id = SupportDb.addSupportRequest(user_id, subject, description)
     return json.dumps({"request_id": request_id, "status": "Support request created successfully."})
 
 ####################
@@ -277,6 +379,42 @@ def validateSupportRequest(user_messages, parameters_required, arguments):
     return missing
 
 ####################
+## Generate Image    --  Chatbot Function
+####################
+def generateImage(user_id, session_id, text_prompt, size_index= 0):
+    """
+    size_index -> index wrt IMAGE_GEN_SIZES
+    Takes a string prompt and a resolution
+    Generates an image
+    Stores it in the storage blob and and returns an SAS URL
+    """
+    client = AzureOpenAI(
+        api_version=AZURE_OPENAI_API_VERSION,  
+        api_key=AZURE_OPENAI_API_KEY,  
+        azure_endpoint=AZURE_AI_FOUNDRY_ENDPOINT
+    )
+
+    result = client.images.generate(
+        model=AZURE_OPENAI_IMAGE_GEN_DEPLOYMENT_NAME,
+        prompt=text_prompt,
+        size = IMAGE_GEN_SIZES[size_index],
+        n=1,
+        response_format="b64_json"
+    )
+
+    base64_data = result.data[0].b64_json
+    if not base64_data:
+        raise ValueError("No base64 image data returned.")
+
+    #uploading image to blob storage
+    image_bytes = base64.b64decode(base64_data)
+    blob_name = f"{session_id}/{uuid.uuid4()}.png"
+    image_sas_url = Container.uploadBlob(container_name=AZURE_STORAGE_ACCOUNT_IMAGES_CONTAINER_NAME, blob_directory=blob_name, blob_content=image_bytes)
+
+    return image_sas_url
+
+
+####################
 ## Send Message
 ####################
 def sendMessage(user_id, openai_client, search_client, session_id, messages):
@@ -285,7 +423,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 
 
     #add the user query
-    Database.addMessage(user_id, session_id, messages[-1]['role'], messages[-1]['content']) 
+    ChatDb.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
 
     query = messages[-1]['content']
     latest_message = messages[-1]
@@ -295,69 +433,6 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
     messages = ensureTokenLimit(openai_client, search_client, user_id, session_id, messages)
     messages.append(latest_message)
 
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "hybridSearch",
-                "description": "Performs hybrid search on the search index to retrieve relevant documents. Useful for when you need to find relevant information in the knowledge base to answer the query.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The user prompt that was sent to the chat completion model. It the last user message.",
-                        },
-                    },
-                    "required": ["query"],
-                },
-            }
-        },        
-        {
-            "type": "function",
-            "function": {
-                "name": "createSupportRequest",
-                "description": """
-                Creates a customer support request in the database.
-                Useful for when the user wants to create a support request regarding an issue they are facing.
-                If you don't have enough information to assist the user or if the user needs actual physical assistance,
-                you should create a support request by calling this function.
-                """,
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "user_id": {
-                            "type": "string",
-                            "description": "The id of the user issuing the support request. This will be passed from the backend. you don't have access to it directly.",
-                        },
-                        "subject": {
-                            "type": "string",
-                            "description": "This is a title (a brief sentence) summarizing the user's issue. You generate it from the conversation.",
-                        },
-                        "description": {
-                            "type": "string",
-                            "description": "A detailed description of the user's issue (under 120 words). You generate it from the user message history. "
-                            "It should include the vehicle make, model, year, and issue description EXACTLY as provided by the customer (no added details).",
-                        },
-                        "model": {
-                            "type": "string",
-                            "description": "This is the model of the vehicle owned by the user.",
-                        },
-                        "make": {
-                            "type": "string",
-                            "description": "This is the make of the vehicle owned by the user.",
-                        },
-                        "year": {
-                            "type": "string",
-                            "description": "This is the year of the vehicle owned by the user",
-                        },
-                    },
-                    "required": ["user_id", "subject", "description"],
-                },
-            }
-        }
-    ]
-
     # First API call: Ask the model to use the functions
     response = openai_client.chat.completions.create(
         stream=False,
@@ -365,7 +440,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
         model=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
         temperature=0.5,
         max_tokens=MAX_TOKENS,
-        tools=tools,
+        tools=TOOLS,
         tool_choice="auto",
         )
 
@@ -397,7 +472,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                         "role": "assistant",
                         "content": followup_prompt
                     })
-                    Database.addMessage(user_id, session_id, "assistant", followup_prompt)
+                    ChatDb.addMessage(user_id, session_id, "text", "assistant", followup_prompt)
                     return messages
                 else:
                     function_response = createSupportRequest(
@@ -405,6 +480,35 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                         subject=function_args.get("subject"),
                         description=function_args.get("description")
                     )
+            elif function_name == "generateImage":
+                #verifying if the image generation limit has been reached
+                image_count = 0
+                for msg in messages[:-1]:
+                    if not isinstance(msg["content"], str):
+                        image_count += 1
+
+                # If the quota has been met
+                if image_count >= 3:
+                    messages.append({
+                        "role": "assistant",
+                        "content": f"I am unable to generate any more images. You've already met your quota: {IMAGE_GEN_QUOTA} images per session."
+                    })
+                    ChatDb.addMessage(user_id, session_id, "text", "assistant", followup_prompt)
+                    return messages
+                
+                #interpreting image size
+                index = function_args.get("size_index")
+                if (index >= len(IMAGE_GEN_SIZES) or index < 0):
+                    index = 0
+
+                image_sas_url = generateImage(user_id, session_id, function_args.get("text_prompt"), index)
+                ChatDb.addMessage(user_id, session_id, "image", "user", [{"type": "image_url", "image_url": {"url": image_sas_url}}])
+                messages.append({
+                        "role": "user",
+                        "content": [{"type": "image_url", "image_url": {"url": image_sas_url}}]
+                    })
+                return messages
+
             else:
                 function_response = json.dumps({"error": "Unknown function"})
             
@@ -424,7 +528,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
         )
 
         full_reply = final_response.choices[0].message.content
-        Database.addMessage(user_id, session_id, "assistant", full_reply)
+        ChatDb.addMessage(user_id, session_id, "text", "assistant", full_reply)
 
         messages.append({
             "role": "assistant",
@@ -435,7 +539,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
     
     else: #if the first API call decided not to call a fucntion
         reply = response_message.content
-        Database.addMessage(user_id, session_id, "assistant", reply)
+        ChatDb.addMessage(user_id, session_id, "text", "assistant", reply)
 
         messages.append({
             "role": "assistant",
@@ -450,7 +554,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
 def sendMessageHelper(user_id, session_id, query):
     
     openai_client, search_client = initializeClients()
-    messages = Database.getMessages(user_id=user_id, session_id=session_id)
+    messages = ChatDb.getMessages(user_id=user_id, session_id=session_id)
 
     messages.append({
         "role": "user",
@@ -497,8 +601,8 @@ def initializeChat(user_id, session_id):
 
     full_reply = response.choices[0].message.content
 
-    Database.addMessage(user_id, session_id, messages[-1]['role'], messages[-1]['content']) 
-    Database.addMessage(user_id, session_id, "assistant", full_reply)
+    ChatDb.addMessage(user_id, session_id, "text", messages[-1]['role'], messages[-1]['content']) 
+    ChatDb.addMessage(user_id, session_id, "text", "assistant", full_reply)
 
     messages.append({
         "role": "assistant",
@@ -510,14 +614,14 @@ def initializeChat(user_id, session_id):
 
 
 def listMessages(user_id, session_id):
-        return Database.getMessages(user_id=user_id, session_id=session_id)
+        return ChatDb.getMessages(user_id=user_id, session_id=session_id)
 
 ###################
 ## Create Session
 ###################
 def createSession(user_id, session_name):
 
-    new_session_id = Database.addSession(user_id, session_name)
+    new_session_id = ChatDb.addSession(user_id, session_name)
     initializeChat(user_id, new_session_id)
     return new_session_id
 
@@ -527,7 +631,7 @@ def createSession(user_id, session_name):
 ###################
 def clearChat(user_id, session_id):
 
-    Database.clearSession(user_id=user_id, session_id=session_id)
+    ChatDb.clearSession(user_id=user_id, session_id=session_id)
     messages = initializeChat(user_id, session_id)
     return messages
 
@@ -576,7 +680,7 @@ def generateAudio(text):
 
     endpoint = os.getenv("AZURE_TEXT_TO_SPEECH_ENDPOINT")
     speech_config = speechsdk.SpeechConfig(subscription=AZURE_OPENAI_API_KEY, 
-                                           endpoint=endpoint)
+                                        endpoint=endpoint)
     speech_config.speech_synthesis_voice_name = "en-US-BrandonMultilingualNeural"
     
     speech_config.set_speech_synthesis_output_format(
