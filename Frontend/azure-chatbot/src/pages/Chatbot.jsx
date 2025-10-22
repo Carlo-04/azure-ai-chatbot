@@ -5,6 +5,7 @@ import "primeicons/primeicons.css";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useUser } from "../contexts/UserContext";
 import Chat from "../components/Chatbot/Chat";
+import SpeechToSpeech from "../components/Chatbot/SpeechToSpeech";
 
 export default function Chatbot() {
   const [sessionsList, setSessionsList] = useState([]); //[{"session_id": ..., "session_title": ...}]
@@ -13,7 +14,7 @@ export default function Chatbot() {
   const [creatingNewSession, setCreatingNewSession] = useState(false); //this is the form to create a new session
   const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState("");
-
+  const [stsActive, setStsActive] = useState(false);
   const { user } = useUser();
 
   useEffect(() => {
@@ -92,6 +93,7 @@ export default function Chatbot() {
       );
     }
   };
+
   return (
     <div className="flex flex-row justify-start items-center w-full h-full">
       {/* Side bar */}
@@ -150,7 +152,10 @@ export default function Chatbot() {
                     `}>
                   <div
                     className="cursor-pointer hover:font-semibold"
-                    onClick={() => setCurrentSessionId(session.session_id)}>
+                    onClick={() => {
+                      setCurrentSessionId(session.session_id);
+                      setStsActive(false);
+                    }}>
                     {session.session_title}
                   </div>
                   <button
@@ -179,6 +184,17 @@ export default function Chatbot() {
             )}
           </div>
         )}
+
+        <div className="flex justify-center items-center mb-2">
+          <button
+            className="bg-bg-secondary hover:bg-bg-primary text-text-secondary"
+            onClick={() => {
+              setStsActive(!stsActive);
+              setCurrentSessionId("");
+            }}>
+            Live Chat
+          </button>
+        </div>
       </div>
 
       {/* current chat */}
@@ -187,6 +203,13 @@ export default function Chatbot() {
           <div className="flex w-2/3 justify-start items-center">
             <Chat session_id={currentSessionId} />
           </div>
+        </div>
+      )}
+
+      {/* live STS chat */}
+      {stsActive && currentSessionId == "" && (
+        <div className="flex flex-1 w-8/10 h-full p-10 items-start justify-center overflow-auto">
+          <SpeechToSpeech />
         </div>
       )}
     </div>

@@ -12,10 +12,14 @@ import requests
 import re
 import base64
 import uuid
+from dotenv import load_dotenv
 
 import ChatDb
 import CustomerServiceDb as SupportDb
 import Container
+
+load_dotenv()
+
 
 # Retrieve environment variables
 # global AZURE_FOUNDRY_ENDPOINT, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_MODEL_NAME, AZURE_OPENAI_CHAT_DEPLOYMENT_NAME, AZURE_OPENAI_API_VERSION
@@ -41,7 +45,7 @@ DEFAULT_CHATBOT_PROMPT = """
 You are a friendly retrieval-augmented assistant acting as a representative for a dealership. 
 Your primary role is to assist old or potential customers with their inquiries about vehicles, dealership information, or service-related issues.
 
-You have 3 core capabilities:
+You have 4 core capabilities:
 1. **Vehicle & Dealership Information (RAG)** — Use the `hybridSearch` function when 
 the user asks questions about vehicles, dealership locations, hours, or services.
 2. **Customer Support Requests** — Use the `createSupportRequest` function only when 
@@ -221,7 +225,7 @@ def initializeClients():
 ####################
 ## Token Counter
 ####################
-def num_tokens_from_messages(messages):
+def num_tokens_from_messages(messages):   #TODO: Gotta add token estimation for images. Currently the user is limited to 3 images to keep token count limited
     encoding = tiktoken.encoding_for_model(AZURE_OPENAI_MODEL_NAME)
     num_tokens = 0
     for message in messages:
@@ -467,7 +471,7 @@ def sendMessage(user_id, openai_client, search_client, session_id, messages):
                 if len(missing)>0:
                     # Prompt the user for missing fields instead of creating the request
                     followup_prompt = f"Thank you for your cooperation. In order for me to create your support request, I need you to provide me with: {', '.join(missing)}."
-                    "\n Kindly type out the term as it is formally defined (might contain a \"-\" or special characters) "
+                    followup_prompt += "\nKindly type out the term as it is formally defined (might've been mistyped or might contain a \"-\" or special characters) "
                     messages.append({
                         "role": "assistant",
                         "content": followup_prompt

@@ -8,8 +8,9 @@ import uuid
 from datetime import datetime, timezone
 import os
 import bcrypt
+from dotenv import load_dotenv
 
-
+load_dotenv()
 
 COSMO_DB_URI = os.getenv("COSMO_DB_URI")
 COSMO_DB_PRIMARY_KEY = os.getenv("COSMO_DB_PRIMARY_KEY")
