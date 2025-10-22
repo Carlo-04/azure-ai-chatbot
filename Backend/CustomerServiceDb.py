@@ -9,9 +9,12 @@ from azure.core.credentials import AzureKeyCredential
 import uuid
 from datetime import datetime, timezone
 import os
+from dotenv import load_dotenv
 
 from UsersDb import initializeContainer, userIsValid, getUserInfo
 
+
+load_dotenv()
 COSMO_DB_URI = os.getenv("COSMO_DB_URI")
 COSMO_DB_PRIMARY_KEY = os.getenv("COSMO_DB_PRIMARY_KEY")
 COSMO_DB_NAME = os.getenv("COSMO_DB_NAME")
