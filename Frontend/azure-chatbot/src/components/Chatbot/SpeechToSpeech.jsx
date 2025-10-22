@@ -10,7 +10,8 @@ const SpeechToSpeech = () => {
   const [isRecording, setIsRecording] = useState(false);
   const processorRef = useRef(null);
   const sourceRef = useRef(null);
-  const [currentMsgTranscript, setCurrentMsgTranscript] = useState("");
+  const [currentMsgTranscript, setCurrentMsgTranscript] =
+    useState("Connecting...");
 
   const currentResponseIdRef = useRef("");
   const { user } = useUser();
@@ -43,6 +44,8 @@ const SpeechToSpeech = () => {
         // If String
         if (data == "ready") {
           setIsConnected(true);
+          setCurrentMsgTranscript("Ready");
+          startRecording();
         } else if (data == "function_in_progress") {
           setCurrentMsgTranscript("Processing your request...");
         }
@@ -218,19 +221,6 @@ const SpeechToSpeech = () => {
       <div className="flex w-3/4 h-1/2 max-h-3/4 max-w-3/4 justify-center items-center text-center text-text-primary bg-bg-tertiary rounded-2xl p-2">
         {currentMsgTranscript}
       </div>
-      <button
-        onClick={isRecording ? stopRecording : startRecording}
-        disabled={!isConnected}
-        className={`px-6 py-3 rounded-lg text-white ${
-          isRecording
-            ? "bg-red-500"
-            : isConnected
-            ? "bg-green-500"
-            : "bg-gray-400"
-        }`}>
-        {isRecording ? "Pause" : isConnected ? "Start" : "Connecting..."}
-      </button>
-      <p>Pause button still needs debugging. Don't pause mid-conversation.</p>
     </div>
   );
 };
