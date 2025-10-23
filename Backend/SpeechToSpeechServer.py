@@ -251,13 +251,5 @@ async def websocketEndpoint(ws: WebSocket):
     gpt_input_task = asyncio.create_task(recvFromGpt())
 
     await asyncio.gather(client_input_task, gpt_input_task)
-    # except WebSocketDisconnect:
-    #     print("❌ Main: client disconnected")
-    # finally:
-    #     print("🧹 Cleaning up")
-    #     client_input_task.cancel()
-    #     gpt_input_task.cancel()
-    #     await asyncio.gather(input_task, output_task, return_exceptions=True)
-    #     print("✅ Cleanup complete")
 
     print("🔒 WebSocket connection closed")
