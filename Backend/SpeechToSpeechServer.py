@@ -163,82 +163,69 @@ async def websocketEndpoint(ws: WebSocket):
     ################
     ## From GPT To Client
     ##############
-    async def recv_from_gpt():
-        async for message in gpt_ws:
-            server_event = json.loads(message)
+    async def recvFromGpt():
+        try:
+            async for message in gpt_ws:
+                server_event = json.loads(message)
 
-            # forward audio chunk to client
-            if server_event.get("type") == "response.audio.delta":
-                delta = server_event.get("delta")
-                if delta:
-                    await ws.send_bytes(base64.b64decode(delta))
-            # forward transcript chunk to client
-            elif server_event.get("type") == "response.audio_transcript.delta":
-                delta = server_event.get("delta")
-                response_id = server_event.get("response_id")
-                await ws.send_json({"response_id": response_id, "transcript_delta": delta})
+                # forward audio chunk to client
+                if server_event.get("type") == "response.audio.delta":
+                    delta = server_event.get("delta")
+                    if delta:
+                        await ws.send_bytes(base64.b64decode(delta))
+                # forward transcript chunk to client
+                elif server_event.get("type") == "response.audio_transcript.delta":
+                    delta = server_event.get("delta")
+                    response_id = server_event.get("response_id")
+                    await ws.send_json({"response_id": response_id, "transcript_delta": delta})
 
-            # Function Calls
-            elif server_event.get("type") == "response.output_item.done":
-                if server_event.get("item").get("type") == "function_call":
-                    function_details = server_event.get("item")
-                    await ws.send_text("function_in_progress")  #notify client that their request is in progress
+                # Function Calls
+                elif server_event.get("type") == "response.output_item.done":
+                    if server_event.get("item").get("type") == "function_call":
+                        function_details = server_event.get("item")
+                        await ws.send_text("function_in_progress")  #notify client that their request is in progress
+                        
+                        #RAG: Hybrid Search
+                        if function_details.get("name") == "hybridSearch":
+                            search_results = hybridSearch(json.loads(function_details.get("arguments")).get("query"))
+                            model_response = {
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "function_call_output",
+                                    "call_id": function_details.get("call_id"),
+                                    "output": search_results
+                                }
+                            }
+                            await gpt_ws.send(json.dumps(model_response))
+                            await gpt_ws.send(json.dumps({"type": "response.create"}))
+
+                        #Support Request
+                        if function_details.get("name") == "createSupportRequest":
+                            args = json.loads(function_details.get("arguments"))
+                            request_results = createSupportRequest(user_id, args.get("subject"), args.get("description"))
+                            model_response = {
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "function_call_output",
+                                    "call_id": function_details.get("call_id"),
+                                    "output": request_results
+                                }
+                            }
+                            await gpt_ws.send(json.dumps(model_response))
+                            await gpt_ws.send(json.dumps({"type": "response.create"}))
                     
-                    #RAG: Hybrid Search
-                    if function_details.get("name") == "hybridSearch":
-                        search_results = hybridSearch(json.loads(function_details.get("arguments")).get("query"))
-                        model_response = {
-                            "type": "conversation.item.create",
-                            "item": {
-                                "type": "function_call_output",
-                                "call_id": function_details.get("call_id"),
-                                "output": search_results
-                            }
-                        }
-                        await gpt_ws.send(json.dumps(model_response))
-                        await gpt_ws.send(json.dumps({"type": "response.create"}))
-
-                    #Support Request
-                    if function_details.get("name") == "createSupportRequest":
-                        args = json.loads(function_details.get("arguments"))
-                        request_results = createSupportRequest(user_id, args.get("subject"), args.get("description"))
-                        model_response = {
-                            "type": "conversation.item.create",
-                            "item": {
-                                "type": "function_call_output",
-                                "call_id": function_details.get("call_id"),
-                                "output": request_results
-                            }
-                        }
-                        await gpt_ws.send(json.dumps(model_response))
-                        await gpt_ws.send(json.dumps({"type": "response.create"}))
-                
-            # elif server_event.get("type") == "response.done":
-            #     if server_event.get("output"):
-            #         if server_event.get("output")[0].get("type") == "function_call":
-            #             function_details = server_event.get("output")[0]
-
-            #             if function_details.get("name") == "hybridSearch":
-            #                 print(json.loads(function_details.get("arguments")["query"]))
-            #                 search_results = hybridSearch(json.loads(function_details.get("arguments")["query"]))
-            #                 print(f"Search results: {search_results}")
-            #                 model_response = {
-            #                     "type": "conversation.item.create",
-            #                     "item": {
-            #                         "type": "function_call_output",
-            #                         "call_id": function_details.get("call_id"),
-            #                         "output": search_results
-            #                     }
-            #                 }
-
-            else:
-                print("Received event:", json.dumps(server_event, indent=2))
+                else:
+                    print("Received event:", json.dumps(server_event, indent=2))
+        
+        except Exception as e:
+            print(f"❌ Client disconnected: {e}")
+            return
                 
 
     ################
     ## From Client To GPT
     ##############
-    async def recv_from_client():
+    async def recvFromClient():
         try:
             while True:
                 message = await ws.receive()
@@ -257,9 +244,20 @@ async def websocketEndpoint(ws: WebSocket):
 
         except Exception as e:
             print(f"❌ Client disconnected: {e}")
-            await ws.close()
+            return
 
     # Run both tasks concurrently
-    await asyncio.gather(recv_from_gpt(), recv_from_client())
+    client_input_task = asyncio.create_task(recvFromClient())
+    gpt_input_task = asyncio.create_task(recvFromGpt())
+
+    await asyncio.gather(client_input_task, gpt_input_task)
+    # except WebSocketDisconnect:
+    #     print("❌ Main: client disconnected")
+    # finally:
+    #     print("🧹 Cleaning up")
+    #     client_input_task.cancel()
+    #     gpt_input_task.cancel()
+    #     await asyncio.gather(input_task, output_task, return_exceptions=True)
+    #     print("✅ Cleanup complete")
 
     print("🔒 WebSocket connection closed")

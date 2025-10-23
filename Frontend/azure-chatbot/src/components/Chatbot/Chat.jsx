@@ -116,7 +116,6 @@ export default function Chat({ session_id }) {
     <div>
       <div
         className="
-        border border-gray-300      
         rounded-2xl             
         p-2.5                     
         min-h-75         
