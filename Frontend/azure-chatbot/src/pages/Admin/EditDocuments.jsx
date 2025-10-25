@@ -133,7 +133,7 @@ export default function EditDocuments() {
         {/* Uploading files to the index */}
         <div className="flex flex-1 flex-col w-1/2 justify-content-center">
           {uploadProgress == 100 && (
-            <div className="flex flex-row w-full justify-center items-center">
+            <div className="flex flex-row w-full justify-center items-center text-text-primary">
               <div className="w-20 h-20">
                 <LoadingSpinner />
               </div>
@@ -187,7 +187,7 @@ export default function EditDocuments() {
 
                 <div className="flex gap-2">
                   <button
-                    className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-primary"
+                    className="px-3 py-1 bg-bg-secondary text-text-primary rounded hover:bg-bg-primary"
                     onClick={() => handleDeleteDocument(file_name, idx)}>
                     {documentsDeleting.includes(idx) ? "Deleting..." : "Delete"}
                   </button>

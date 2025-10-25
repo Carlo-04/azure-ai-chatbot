@@ -200,7 +200,7 @@ async def websocketEndpoint(ws: WebSocket):
                             await gpt_ws.send(json.dumps({"type": "response.create"}))
 
                         #Support Request
-                        if function_details.get("name") == "createSupportRequest":
+                        elif function_details.get("name") == "createSupportRequest":
                             args = json.loads(function_details.get("arguments"))
                             request_results = createSupportRequest(user_id, args.get("subject"), args.get("description"))
                             model_response = {
@@ -253,3 +253,5 @@ async def websocketEndpoint(ws: WebSocket):
     await asyncio.gather(client_input_task, gpt_input_task)
 
     print("🔒 WebSocket connection closed")
+
+    #uvicorn SpeechToSpeechServer:app --reload --host 0.0.0.0 --port 8000

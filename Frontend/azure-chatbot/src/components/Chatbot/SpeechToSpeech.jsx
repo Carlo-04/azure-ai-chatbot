@@ -71,8 +71,8 @@ const SpeechToSpeech = () => {
 
     return () => {
       ws.close();
-      audioContext.close();
       clearAudioBuffer();
+      stopRecording();
     };
   }, []);
 

@@ -97,7 +97,7 @@ export default function Chatbot() {
   return (
     <div className="flex flex-row justify-start items-center w-full h-full">
       {/* Side bar */}
-      <div className=" flex flex-col h-full w-1/5 overflow-auto bg-bg-tertiary">
+      <div className=" flex flex-col h-full w-1/5 max-w-75 overflow-auto bg-bg-tertiary">
         {/* Creating Sessions */}
         <div className="flex flex-col w-full items-center py-3">
           {creatingNewSession && (
@@ -110,16 +110,16 @@ export default function Chatbot() {
                 value={newSessionTitle}
                 onChange={(e) => setNewSessionTitle(e.target.value)}
                 required
-                className="w-full px-4 py-2 border-[0.5px] border-text-secondary rounded-md"
+                className="w-full px-4 py-2 border-[0.5px] border-text-secondary text-text-primary rounded-md"
               />
               <div className="flex flex-row justify-center gap-2 my-3">
                 <button
-                  className="w-1/2 bg-bg-primary hover:bg-bg-tertiary text-txt-primary"
+                  className="w-1/2 bg-bg-primary hover:bg-bg-tertiary text-text-primary"
                   onClick={() => setCreatingNewSession(false)}>
                   Cancel
                 </button>
                 <button
-                  className="w-1/2 bg-bg-secondary hover:bg-bg-tertiary text-txt-primary"
+                  className="w-1/2 bg-bg-secondary hover:bg-bg-tertiary text-text-primary"
                   onClick={handleCreateSession}>
                   {newSessionLoading && "Creating..."}
                   {!newSessionLoading && "Create"}
@@ -129,7 +129,7 @@ export default function Chatbot() {
           )}
           {!creatingNewSession && (
             <button
-              className="w-3/4 bg-bg-secondary hover:bg-bg-primary text-txt-primary"
+              className="w-3/4 bg-bg-secondary hover:bg-bg-primary text-text-primary"
               onClick={() => setCreatingNewSession(true)}>
               New Session
             </button>
@@ -143,7 +143,7 @@ export default function Chatbot() {
                 <div
                   key={idx}
                   className={`
-                    w-full flex items-center justify-between hover:bg-bg-secondary  rounded-md shadow p-3
+                    w-full flex items-center justify-between hover:bg-bg-secondary p-3
                     ${
                       session.session_id === currentSessionId
                         ? "bg-bg-secondary"
