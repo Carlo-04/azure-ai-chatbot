@@ -17,10 +17,11 @@ COSMO_DB_PRIMARY_KEY = os.getenv("COSMO_DB_PRIMARY_KEY")
 COSMO_DB_NAME = os.getenv("COSMO_DB_NAME")
 COSMO_DB_CONVERSATIONS_CONTAINER_NAME = os.getenv("COSMO_DB_CONVERSATIONS_CONTAINER_NAME")
 COSMO_DB_SUPPORT_CONTAINER_NAME = os.getenv("COSMO_DB_SUPPORT_CONTAINER_NAME")
+COSMO_DB_USER_VEHICLES_CONTAINER_NAME = os.getenv("COSMO_DB_USER_VEHICLES_CONTAINER_NAME")
 
 
 def initializeContainer(container_num):
-    # container numbers: Conversations: 0, Support: 1
+    # container numbers: Conversations: 0, Support: 1, userVehicles: 2
 
     client = CosmosClient(COSMO_DB_URI, credential=COSMO_DB_PRIMARY_KEY)
     database = client.get_database_client(COSMO_DB_NAME)
@@ -29,6 +30,8 @@ def initializeContainer(container_num):
             container = database.get_container_client(COSMO_DB_CONVERSATIONS_CONTAINER_NAME) #partition key is userId
         case 1:
             container = database.get_container_client(COSMO_DB_SUPPORT_CONTAINER_NAME) #partition key is supportAgentId
+        case 2:
+            container = database.get_container_client(COSMO_DB_USER_VEHICLES_CONTAINER_NAME) #partition key is userId
     return container
     
 ##################

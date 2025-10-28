@@ -266,7 +266,7 @@ async def websocketEndpoint(ws: WebSocket):
                                 "item": {
                                     "type": "function_call_output",
                                     "call_id": function_details.get("call_id"),
-                                    "output": vehicle_results
+                                    "output": json.dumps(vehicle_results)
                                 }
                             }
                             await gpt_ws.send(json.dumps(model_response))

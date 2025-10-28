@@ -282,4 +282,4 @@ def queryUserVehicles(user_id, make = None, model = None, year = None):
         enable_cross_partition_query=True
     ))
 
-    return json.dumps({"User owned vehicles": items})
+    return {"User owned vehicles": items}

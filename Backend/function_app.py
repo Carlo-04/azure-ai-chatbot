@@ -4,12 +4,12 @@ import logging
 import json
 import os
 
-import Chatbot
+import ChatbotHelpers as ChatbotHelpers
 import AISearch
 from UsersDb import isAdmin, login
 import ChatDb
 import CustomerServiceDb as supportDb
-
+import ChatbotMessageHandler as ChatbotMessageHandler
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 ############
@@ -112,7 +112,7 @@ def chatbotSendMessage(req: func.HttpRequest) -> func.HttpResponse:
 
         query = req_body.get("query")
 
-        reply = Chatbot.sendMessageHelper(user_id, session_id, query)
+        reply = ChatbotMessageHandler.sendMessageHelper(user_id, session_id, query)
         
         return func.HttpResponse(
             json.dumps({"reply": reply}, ensure_ascii=False).encode('utf-8'),
@@ -181,7 +181,7 @@ def chatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        session_id = Chatbot.createSession(user_id, session_title)
+        session_id = ChatbotHelpers.createSession(user_id, session_title)
      
         return func.HttpResponse(
             json.dumps({"session_id": session_id, "session_title": session_title}),
@@ -252,7 +252,7 @@ def chatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        messages = Chatbot.listMessages(user_id, session_id)
+        messages = ChatbotHelpers.listMessages(user_id, session_id)
         
         return func.HttpResponse(
             json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
@@ -288,7 +288,7 @@ def chatbotClearChat(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
         
-        messages = Chatbot.clearChat(user_id, session_id)
+        messages = ChatbotHelpers.clearChat(user_id, session_id)
 
         return func.HttpResponse(
             json.dumps({"messages": messages}, ensure_ascii=False).encode('utf-8'),
@@ -317,7 +317,7 @@ def chatbotSpeechToText(req: func.HttpRequest) -> func.HttpResponse:
         if not file:
             return func.HttpResponse("No audio file uploaded", status_code=400)
 
-        transcript = Chatbot.transcribeAudio(file)
+        transcript = ChatbotHelpers.transcribeAudio(file)
 
         return func.HttpResponse(
             body=str(transcript),
@@ -346,7 +346,7 @@ def chatbotTextToSpeech(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse("Missing 'text' in request body", status_code=400)
 
         # Get audio bytes (MP3)
-        audio_bytes = Chatbot.generateAudio(text)
+        audio_bytes = ChatbotHelpers.generateAudio(text)
 
         return func.HttpResponse(
             body=audio_bytes,
