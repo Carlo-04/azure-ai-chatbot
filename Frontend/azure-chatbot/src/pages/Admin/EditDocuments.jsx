@@ -179,7 +179,7 @@ export default function EditDocuments() {
               <div
                 key={idx}
                 className="w-full flex items-center justify-between text-text-primary bg-bg-tertiary rounded-md shadow p-3">
-                <p>{file_name}</p>
+                <p className="font-medium">{file_name}</p>
 
                 <div className="flex gap-2">
                   <button
