@@ -178,12 +178,8 @@ export default function EditDocuments() {
             documentsList.map((file_name, idx) => (
               <div
                 key={idx}
-                className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
-                <a
-                  href="google.com"
-                  className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
-                  {file_name}
-                </a>
+                className="w-full flex items-center justify-between text-text-primary bg-bg-tertiary rounded-md shadow p-3">
+                <p>{file_name}</p>
 
                 <div className="flex gap-2">
                   <button
