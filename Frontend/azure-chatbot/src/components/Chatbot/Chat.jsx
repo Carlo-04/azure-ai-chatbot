@@ -151,7 +151,7 @@ export default function Chat({ session_id }) {
               {displayContent(msg.content)}
             </div>
 
-            {msg.role === "assistant" && (
+            {msg.role === "assistant" && typeof msg.content === "string" && (
               <div
                 className="flex 
                 items-center 
