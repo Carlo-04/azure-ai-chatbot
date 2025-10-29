@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
+import json
 
 from UsersDb import initializeContainer, userIsValid, getUserInfo
 
@@ -223,3 +224,62 @@ def sendEmail(user_id, recipient_id, subject, body_text, body_html):
     }   
     poller = email_client.begin_send(message)
     return poller.result()
+
+
+#############
+## Check what vehicles a user has
+############
+def addVehicle(user_id, make, model, year):
+    if not userIsValid(user_id):
+        raise ValueError("This user does not exist")
+    
+    vehicle_id = str(uuid.uuid4())
+    vehicle = {
+        "id": vehicle_id,  
+        "user_id": user_id,
+        "documentType": "user_vehicle",
+        "make": make,
+        "model": model,
+        "year": year
+    }
+    container = initializeContainer(2)
+    container.create_item(body=vehicle)
+    return vehicle_id
+
+
+def queryUserVehicles(user_id, make = None, model = None, year = None):
+    """
+    Fetch vehicles from the Cosmos DB userVehicles container.
+    If no make/model/year are provided, return all vehicles for the user.
+    Otherwise, apply filters based on provided parameters.
+    """
+
+    container = initializeContainer(2)
+
+    # Base query: always filter by user_id
+    query = "SELECT c.id, c.make, c.model, c.year FROM c WHERE c.user_id = @user_id"
+    parameters = [{"name": "@user_id", "value": user_id}]
+
+    # Optional filters
+    filters = []
+    if make:
+        filters.append("c.make = @make")
+        parameters.append({"name": "@make", "value": make})
+    if model:
+        filters.append("c.model = @model")
+        parameters.append({"name": "@model", "value": model})
+    if year:
+        filters.append("c.year = @year")
+        parameters.append({"name": "@year", "value": year})
+
+
+    if filters:
+        query += " AND (" + " OR ".join(filters) + ")"
+
+    items = list(container.query_items(
+        query=query,
+        parameters=parameters,
+        enable_cross_partition_query=True
+    ))
+
+    return {"User owned vehicles": items}

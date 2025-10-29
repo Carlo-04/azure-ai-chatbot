@@ -6,9 +6,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 import websockets
 from dotenv import load_dotenv
 
-from Chatbot import hybridSearch, createSupportRequest
-
+from ChatbotMessageHandler import hybridSearch, createSupportRequest
+from CustomerServiceDb import queryUserVehicles
 load_dotenv()
+
+
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_WSS_ENDPOINT = os.getenv("AZURE_OPENAI_WSS_ENDPOINT")
 
@@ -35,15 +37,25 @@ the user clearly describes a problem or issue they are facing with their vehicle
         3. Vehicle year
         4. A brief description of the specific issue (e.g., "the AC isn't working," "the car is making a noise").
 
-    - Alwways check the user's latest mesage for these fields. They must all be present in the user's message history.
+    - Alwways check the user's mesages for these fields.
+    - You have access to a queryUserVehicles function that can help you get the user's vehicle information, 
+    you may use it to limit the necessary fields to ask the user. Always use this function prior to prompting the user for more info
     - Only after all fields are collected, ask the customer if they want you to create the support request.
-    - Never skip or bypass the field collection step.
+    - Whenever the user provides any extra information, use the queryUserVehicles function to check if you 
+    can get any vehicle details using the current info (assuming you require more info).
     - If the user agrees on a draft that was missing information, once that info is collected, send the new draft for confirmation.
 
 
 3. **Vehicle & Dealership Info (RAG Search):**
     - When the user asks for information about cars, services, dealership details, or inventory, call the `hybridSearch` function.
     - Use only retrieved information to answer queries.
+
+4. **User Vehicles Query:**
+    - Whenever a user expresses an issue with their vehicle, before asking for more information, use 
+    the `queryUserVehicles` function to get details about the user's owned vehicles (use any info that you have at this point).
+    - You have access to a `queryUserVehicles` function that retrieves the user's owned vehicles.
+    - You may use information already provided by the user to have the function filter results by make, model, and year.
+    - If the user has a single vehicle, you can assume that is the vehicle they are referring to in their support request.
 
 ---
 
@@ -75,7 +87,34 @@ TOOLS = [
                     },
                     "required": ["query"]
                 }
-        },        
+        },   
+        {
+            "type": "function",
+            "name": "queryUserVehicles",
+                "description": """
+                Queries the database for vehicles owned by the user.
+                You can provide optional filters such as make, model, and year to narrow down the results
+                Useful for when you need to know what vehicles the user owns in order to create a support request.
+                """,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "model": {
+                            "type": "string",
+                            "description": "This is the model of the vehicle owned by the user.",
+                        },
+                        "make": {
+                            "type": "string",
+                            "description": "This is the make of the vehicle owned by the user.",
+                        },
+                        "year": {
+                            "type": "string",
+                            "description": "This is the year of the vehicle owned by the user",
+                        },
+                    },
+                    "required": []
+                }
+        },     
         {
             "type": "function",
             "name": "createSupportRequest",
@@ -200,7 +239,7 @@ async def websocketEndpoint(ws: WebSocket):
                             await gpt_ws.send(json.dumps({"type": "response.create"}))
 
                         #Support Request
-                        if function_details.get("name") == "createSupportRequest":
+                        elif function_details.get("name") == "createSupportRequest":
                             args = json.loads(function_details.get("arguments"))
                             request_results = createSupportRequest(user_id, args.get("subject"), args.get("description"))
                             model_response = {
@@ -209,6 +248,25 @@ async def websocketEndpoint(ws: WebSocket):
                                     "type": "function_call_output",
                                     "call_id": function_details.get("call_id"),
                                     "output": request_results
+                                }
+                            }
+                            await gpt_ws.send(json.dumps(model_response))
+                            await gpt_ws.send(json.dumps({"type": "response.create"}))
+
+                        elif function_details.get("name") == "queryUserVehicles":
+                            args = json.loads(function_details.get("arguments"))
+                            vehicle_results = queryUserVehicles(
+                                user_id, 
+                                make=args.get("make", None), 
+                                model=args.get("model", None), 
+                                year=args.get("year", None)
+                            )
+                            model_response = {
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "function_call_output",
+                                    "call_id": function_details.get("call_id"),
+                                    "output": json.dumps(vehicle_results)
                                 }
                             }
                             await gpt_ws.send(json.dumps(model_response))
@@ -251,13 +309,7 @@ async def websocketEndpoint(ws: WebSocket):
     gpt_input_task = asyncio.create_task(recvFromGpt())
 
     await asyncio.gather(client_input_task, gpt_input_task)
-    # except WebSocketDisconnect:
-    #     print("❌ Main: client disconnected")
-    # finally:
-    #     print("🧹 Cleaning up")
-    #     client_input_task.cancel()
-    #     gpt_input_task.cancel()
-    #     await asyncio.gather(input_task, output_task, return_exceptions=True)
-    #     print("✅ Cleanup complete")
 
     print("🔒 WebSocket connection closed")
+
+    #uvicorn SpeechToSpeechServer:app --reload --host 0.0.0.0 --port 8000

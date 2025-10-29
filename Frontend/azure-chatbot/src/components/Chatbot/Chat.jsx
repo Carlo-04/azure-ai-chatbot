@@ -126,7 +126,7 @@ export default function Chat({ session_id }) {
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={`flex items-center ${
+            className={`flex items-center text-text-primary ${
               msg.role === "user" && typeof msg.content === "string"
                 ? "justify-end"
                 : "justify-start"
@@ -151,7 +151,7 @@ export default function Chat({ session_id }) {
               {displayContent(msg.content)}
             </div>
 
-            {msg.role === "assistant" && (
+            {msg.role === "assistant" && typeof msg.content === "string" && (
               <div
                 className="flex 
                 items-center 
@@ -182,7 +182,7 @@ export default function Chat({ session_id }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            className="flex flex-1 p-5 h-3 rounded-md border-1"
+            className="flex flex-1 p-5 h-3 rounded-md border-1 border-bg-tertiary text-text-primary"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && input != "") {
                 e.preventDefault(); // prevent newline in the input

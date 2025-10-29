@@ -133,7 +133,7 @@ export default function EditDocuments() {
         {/* Uploading files to the index */}
         <div className="flex flex-1 flex-col w-1/2 justify-content-center">
           {uploadProgress == 100 && (
-            <div className="flex flex-row w-full justify-center items-center">
+            <div className="flex flex-row w-full justify-center items-center text-text-primary">
               <div className="w-20 h-20">
                 <LoadingSpinner />
               </div>
@@ -178,16 +178,12 @@ export default function EditDocuments() {
             documentsList.map((file_name, idx) => (
               <div
                 key={idx}
-                className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
-                <a
-                  href="google.com"
-                  className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
-                  {file_name}
-                </a>
+                className="w-full flex items-center justify-between text-text-primary bg-bg-tertiary rounded-md shadow p-3">
+                <p className="font-medium">{file_name}</p>
 
                 <div className="flex gap-2">
                   <button
-                    className="px-3 py-1 bg-bg-secondary text-white rounded hover:bg-bg-primary"
+                    className="px-3 py-1 bg-bg-secondary text-text-primary rounded hover:bg-bg-primary"
                     onClick={() => handleDeleteDocument(file_name, idx)}>
                     {documentsDeleting.includes(idx) ? "Deleting..." : "Delete"}
                   </button>

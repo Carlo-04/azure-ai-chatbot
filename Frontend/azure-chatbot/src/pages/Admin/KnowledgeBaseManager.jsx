@@ -89,11 +89,11 @@ export default function KnowledgeBaseManager() {
           <div
             key={idx}
             className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
-            <a
-              href="google.com"
-              className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
+            <p
+              className="text-left font-medium text-text-primary hover:font-bold cursor-pointer"
+              onClick={() => handleAddDocs(idx)}>
               {item}
-            </a>
+            </p>
 
             <div className="flex gap-2">
               <button
