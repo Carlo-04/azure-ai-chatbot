@@ -6,7 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 import websockets
 from dotenv import load_dotenv
 
-from ChatbotMessageHandler import hybridSearch, createSupportRequest
+from ChatbotFunctions import hybridSearch, createSupportRequest
 from CustomerServiceDb import queryUserVehicles
 load_dotenv()
 
@@ -24,7 +24,7 @@ You have 3 core capabilities:
 the user asks questions about vehicles, dealership locations, hours, or services.
 2. **Customer Support Requests** — Use the `createSupportRequest` function only when 
 the user clearly describes a problem or issue they are facing with their vehicle or dealership services.
-3. **Image Generation** — Use the `generateImage` function to generate an image according to the user's description.
+3. **User Vehicles Query** — Use the `queryUserVehicles` function to get information about the user's owned vehicles
 
 ---
 
@@ -37,7 +37,7 @@ the user clearly describes a problem or issue they are facing with their vehicle
         3. Vehicle year
         4. A brief description of the specific issue (e.g., "the AC isn't working," "the car is making a noise").
 
-    - Alwways check the user's mesages for these fields.
+    - Always check the user's messages for these fields.
     - You have access to a queryUserVehicles function that can help you get the user's vehicle information, 
     you may use it to limit the necessary fields to ask the user. Always use this function prior to prompting the user for more info
     - Only after all fields are collected, ask the customer if they want you to create the support request.
@@ -170,15 +170,14 @@ async def forwardAudioChunk(gpt_ws, pcm16_bytes):
 @app.websocket("/ws/realtime")
 async def websocketEndpoint(ws: WebSocket):
     await ws.accept()
-    print("🔗 Client connected")
+    # CLIENT CONNECTED
     
     # Establish GPT Realtime connection
     gpt_ws = await websockets.connect(
         AZURE_OPENAI_WSS_ENDPOINT,
         additional_headers=[("api-key", AZURE_OPENAI_API_KEY)]
     )
-    
-    print("✅ Connected to GPT Realtime")
+    # CONNECTED TO GPT REALTIME
 
     # Send session config
     session_update = {
