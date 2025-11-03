@@ -15,7 +15,7 @@ export default function KnowledgeBaseManager() {
   const handleCreateIndex = async () => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_create_index",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_create_index",
         {
           user_id: user.id,
           index_name: newIndexName,
@@ -42,7 +42,7 @@ export default function KnowledgeBaseManager() {
   const handleGetIndexList = async () => {
     try {
       const response = await axios.get(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_list_indexes",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_list_indexes",
         {
           params: { user_id: user.id },
         }
@@ -58,7 +58,7 @@ export default function KnowledgeBaseManager() {
   const handleDeleteIndex = async (idx) => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_index",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_delete_index",
         {
           user_id: user.id,
           index_name: indexList[idx],
@@ -126,7 +126,7 @@ export default function KnowledgeBaseManager() {
 
         {/* form for creating a new index */}
         {isCreatingNewIndex && (
-          <div className="flex flex-col gap-5 mt-5 p-5 items-center">
+          <div className="flex flex-col gap-5 mt-5 p-5 items-center text-text-primary">
             <input
               type="text"
               value={newIndexName}
