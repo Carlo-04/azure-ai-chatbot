@@ -1,3 +1,10 @@
+"""
+This script contains the following api calls:
+- User Login
+- Chatbot APIs
+- AI Search APIs
+- Customer Support APIs
+"""
 import azure.functions as func
 import azure.identity
 import logging

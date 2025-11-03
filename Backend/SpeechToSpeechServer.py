@@ -251,7 +251,8 @@ async def websocketEndpoint(ws: WebSocket):
                             }
                             await gpt_ws.send(json.dumps(model_response))
                             await gpt_ws.send(json.dumps({"type": "response.create"}))
-
+                            
+                        # Query User Vehicles
                         elif function_details.get("name") == "queryUserVehicles":
                             args = json.loads(function_details.get("arguments"))
                             vehicle_results = queryUserVehicles(
