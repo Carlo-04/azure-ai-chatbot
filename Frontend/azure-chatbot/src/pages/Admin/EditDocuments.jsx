@@ -27,7 +27,7 @@ export default function EditDocuments() {
     try {
       setDocumentsLoading(true);
       const response = await axios.get(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_list_documents",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_list_documents",
         {
           params: { user_id: user.id, index_name: index_name },
         }
@@ -45,7 +45,7 @@ export default function EditDocuments() {
     try {
       setDocumentsDeleting((prev) => [...prev, index]);
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_document",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_delete_document",
         {
           user_id: user.id,
           index_name: index_name,
@@ -97,7 +97,7 @@ export default function EditDocuments() {
 
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_add_documents",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_add_documents",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },

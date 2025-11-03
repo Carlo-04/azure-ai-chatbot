@@ -1,3 +1,10 @@
+"""
+This script contains the following api calls:
+- User Login
+- Chatbot APIs
+- AI Search APIs
+- Customer Support APIs
+"""
 import azure.functions as func
 import azure.identity
 import logging
@@ -18,9 +25,9 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 #
 #########   Checks if the user is an admin #################
 #
-@app.function_name(name="IsUserAdmin")
-@app.route(route="http_user_is_admin", methods=["GET"])
-def httpUserIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="UserIsAdmin")
+@app.route(route="user_is_admin", methods=["GET"])
+def userIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Parse request body
         user_id = req.params.get("user_id")
@@ -47,9 +54,9 @@ def httpUserIsAdmin(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-@app.function_name(name="Login")
-@app.route(route="http_user_login", methods=["POST"])
-def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="UserLogin")
+@app.route(route="user_login", methods=["POST"])
+def userLogin(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         req_body = req.get_json()
@@ -93,7 +100,7 @@ def httpUserLogin(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Sending a Message #################
 #
-@app.function_name(name="SendMessage")
+@app.function_name(name="ChatbotSendMessage")
 @app.route(route="chatbot_send_message", methods=["POST"])
 def chatbotSendMessage(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -131,7 +138,7 @@ def chatbotSendMessage(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Getting the List of Sessions #################
 #
-@app.function_name(name="GetSessions")
+@app.function_name(name="ChatbotGetSessions")
 @app.route(route="chatbot_get_sessions", methods=["GET"])
 def chatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -165,7 +172,7 @@ def chatbotGetSessions(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Creating a Session #################
 #
-@app.function_name(name="CreateSession")
+@app.function_name(name="ChatbotCreateSession")
 @app.route(route="chatbot_create_session", methods=["POST"])
 def chatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -201,7 +208,7 @@ def chatbotCreateSession(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Deleting a Session #################
 #
-@app.function_name(name="DeleteSession")
+@app.function_name(name="ChatbotDeleteSession")
 @app.route(route="chatbot_delete_session", methods=["POST"])
 def chatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -235,7 +242,7 @@ def chatbotDeleteSession(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Getting the List of Messages #################
 #
-@app.function_name(name="GetMessagesTrigger")
+@app.function_name(name="ChatbotGetMessagesTrigger")
 @app.route(route="chatbot_get_messages", methods=["POST"])
 def chatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -271,7 +278,7 @@ def chatbotTrigger(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Clearing Messages #################
 #
-@app.function_name(name="ClearChat")
+@app.function_name(name="ChatbotClearChat")
 @app.route(route="chatbot_clear_chat", methods=["POST"])
 def chatbotClearChat(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -309,7 +316,7 @@ def chatbotClearChat(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Speech To Text #################
 #
-@app.function_name(name="SpeechToText")
+@app.function_name(name="ChatbotSpeechToText")
 @app.route(route="chatbot_speech_to_text", methods=["POST"])
 def chatbotSpeechToText(req: func.HttpRequest) -> func.HttpResponse:
     try:
@@ -335,7 +342,7 @@ def chatbotSpeechToText(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Text To Speech #################
 #
-@app.function_name(name="TextToSpeech")
+@app.function_name(name="ChatbotTextToSpeech")
 @app.route(route="chatbot_text_to_speech", methods=["POST"])
 def chatbotTextToSpeech(req: func.HttpRequest) -> func.HttpResponse:
     try:
@@ -364,11 +371,52 @@ def chatbotTextToSpeech(req: func.HttpRequest) -> func.HttpResponse:
 ###############
 
 #
+#########   Get Search Index Name #################
+#
+@app.function_name(name="AISearchGetIndexName")
+@app.route(route="ai_search_get_index_name", methods=["GET"])
+def aiSearchGetIndexName(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        user_id = req.params.get("user_id")
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        index_name = AISearch.getSearchIndexName()
+        
+        return func.HttpResponse(
+            json.dumps({"index_name": index_name}),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in GetIndexName HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
 #########   List Search Indexes #################
 #
-@app.function_name(name="ListSearchIndexes")
-@app.route(route="http_ai_search_list_indexes", methods=["GET"])
-def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchListSearchIndexes")
+@app.route(route="ai_search_list_indexes", methods=["GET"])
+def aiSearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -407,9 +455,9 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   List Documents in an Index #################
 #
-@app.function_name(name="ListDocuments")
-@app.route(route="http_ai_search_list_documents", methods=["GET"])
-def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchListDocuments")
+@app.route(route="ai_search_list_documents", methods=["GET"])
+def aiSearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
     #returns a dic with every retreivable field per doc
 
     try:
@@ -450,9 +498,9 @@ def httpAISearchListIndexes(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   Getting the key field name in an index #################
 #
-@app.function_name(name="GetKeyField")
-@app.route(route="http_ai_search_get_key_field", methods=["GET"])
-def httpAISearchGetKeyField(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchGetKeyField")
+@app.route(route="ai_search_get_key_field", methods=["GET"])
+def aiSearchGetKeyField(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         user_id = req.params.get("user_id")
@@ -492,9 +540,9 @@ def httpAISearchGetKeyField(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   create search index #################
 #
-@app.function_name(name="CreateIndex")
-@app.route(route="http_ai_search_create_index", methods=["POST"])
-def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchCreateIndex")
+@app.route(route="ai_search_create_index", methods=["POST"])
+def aiSearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -594,9 +642,9 @@ def httpAISearchCreateIndex(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   add document to an index #################
 #
-@app.function_name(name="AddDocuments")
-@app.route(route="http_ai_search_add_documents", methods=["POST"])
-def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchAddDocuments")
+@app.route(route="ai_search_add_documents", methods=["POST"])
+def aiSearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
     #This function receives files, processes them with document intelligence and adds them to the index
     try:
         # Get all uploaded files
@@ -632,9 +680,9 @@ def httpAISearchAddDocuments(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   delete document from an index #################
 #
-@app.function_name(name="DeleteDocument")
-@app.route(route="http_ai_search_delete_document", methods=["POST"])
-def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchDeleteDocument")
+@app.route(route="ai_search_delete_document", methods=["POST"])
+def aiSearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -675,9 +723,9 @@ def httpAISearchDeleteDocument(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   delete search index #################
 #
-@app.function_name(name="DeleteIndex")
-@app.route(route="http_ai_search_delete_index", methods=["POST"])
-def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="AISearchDeleteIndex")
+@app.route(route="ai_search_delete_index", methods=["POST"])
+def aiSearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         # Parse request body
@@ -721,7 +769,7 @@ def httpAISearchDeleteIndex(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   List Open Support Requests #################
 #
-@app.function_name(name="ListOpenRequests")
+@app.function_name(name="CustomerSupportListOpenRequests")
 @app.route(route="customer_support_list_open_requests", methods=["GET"])
 def CustomerSupportListOpenRequests(req: func.HttpRequest) -> func.HttpResponse:
     #returns a dic with every retreivable field per doc
@@ -763,7 +811,7 @@ def CustomerSupportListOpenRequests(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########   List InProgress Support Requests By Agent #################
 #
-@app.function_name(name="ListInProgressRequestsByAgent")
+@app.function_name(name="CustomerSupportListInProgressRequestsByAgent")
 @app.route(route="customer_support_list_in_progress_requests_by_agent", methods=["GET"])
 def CustomerSupportListInProgressRequestsByAgent(req: func.HttpRequest) -> func.HttpResponse:
     #returns a dic with every retreivable field per doc
@@ -804,7 +852,7 @@ def CustomerSupportListInProgressRequestsByAgent(req: func.HttpRequest) -> func.
 #
 #########  Handle Support Request  #################
 #
-@app.function_name(name="HandleSupportRequest")
+@app.function_name(name="CustomerSupportHandleSupportRequest")
 @app.route(route="customer_support_handle_support_request", methods=["POST"])
 def CustomerHandleSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -854,7 +902,7 @@ def CustomerHandleSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########  Close Support Request  #################
 #
-@app.function_name(name="CloseSupportRequest")
+@app.function_name(name="CustomerSupportCloseSupportRequest")
 @app.route(route="customer_support_close_support_request", methods=["POST"])
 def CustomerCloseSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -898,7 +946,7 @@ def CustomerCloseSupportRequest(req: func.HttpRequest) -> func.HttpResponse:
 #
 #########  Close Support Request  #################
 #
-@app.function_name(name="SendEmail")
+@app.function_name(name="CustomerSupportSendEmail")
 @app.route(route="customer_support_send_email", methods=["POST"])
 def CustomerSendEmail(req: func.HttpRequest) -> func.HttpResponse:
 

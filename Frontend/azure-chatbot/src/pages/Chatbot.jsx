@@ -94,6 +94,11 @@ export default function Chatbot() {
     }
   };
 
+  const handleSwitchSession = (session_id) => {
+    setCurrentSessionId("");
+    setCurrentSessionId(session_id);
+    setStsActive(false);
+  };
   return (
     <div className="flex flex-row justify-start items-center w-full h-full">
       {/* Side bar */}
@@ -153,8 +158,7 @@ export default function Chatbot() {
                   <div
                     className="cursor-pointer hover:font-semibold"
                     onClick={() => {
-                      setCurrentSessionId(session.session_id);
-                      setStsActive(false);
+                      handleSwitchSession(session.session_id);
                     }}>
                     {session.session_title}
                   </div>
