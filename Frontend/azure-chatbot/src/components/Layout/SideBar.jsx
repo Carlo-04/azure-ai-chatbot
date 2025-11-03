@@ -38,6 +38,12 @@ export default function SideBar() {
                   onClick={() => setVisible(false)}>
                   Knowledge Base
                 </Link>
+                <Link
+                  to="/admin/customerSupport"
+                  className="hover:font-medium w-full text-lg"
+                  onClick={() => setVisible(false)}>
+                  Customer Support
+                </Link>
               </nav>
             </div>
           )}

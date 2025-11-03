@@ -5,6 +5,7 @@ import "primeicons/primeicons.css";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useUser } from "../contexts/UserContext";
 import Chat from "../components/Chatbot/Chat";
+import SpeechToSpeech from "../components/Chatbot/SpeechToSpeech";
 
 export default function Chatbot() {
   const [sessionsList, setSessionsList] = useState([]); //[{"session_id": ..., "session_title": ...}]
@@ -13,7 +14,7 @@ export default function Chatbot() {
   const [creatingNewSession, setCreatingNewSession] = useState(false); //this is the form to create a new session
   const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState("");
-
+  const [stsActive, setStsActive] = useState(false);
   const { user } = useUser();
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function Chatbot() {
   const handleGetSessionsList = async () => {
     try {
       const response = await axios.get(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_get_sessions",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_get_sessions",
         {
           params: { user_id: user.id },
         }
@@ -42,7 +43,7 @@ export default function Chatbot() {
     try {
       setNewSessionLoading(true);
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_create_session",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_create_session",
         {
           user_id: user.id,
           session_title: newSessionTitle,
@@ -72,7 +73,7 @@ export default function Chatbot() {
   const handleDeleteSession = async (target_session_id) => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_chatbot_delete_session",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/chatbot_delete_session",
         {
           user_id: user.id,
           session_id: target_session_id,
@@ -92,10 +93,16 @@ export default function Chatbot() {
       );
     }
   };
+
+  const handleSwitchSession = (session_id) => {
+    setCurrentSessionId("");
+    setCurrentSessionId(session_id);
+    setStsActive(false);
+  };
   return (
     <div className="flex flex-row justify-start items-center w-full h-full">
       {/* Side bar */}
-      <div className=" flex flex-col h-full w-1/5 overflow-auto bg-bg-tertiary">
+      <div className=" flex flex-col h-full w-1/5 max-w-75 overflow-auto bg-bg-tertiary">
         {/* Creating Sessions */}
         <div className="flex flex-col w-full items-center py-3">
           {creatingNewSession && (
@@ -108,16 +115,16 @@ export default function Chatbot() {
                 value={newSessionTitle}
                 onChange={(e) => setNewSessionTitle(e.target.value)}
                 required
-                className="w-full px-4 py-2 border-[0.5px] border-text-secondary rounded-md"
+                className="w-full px-4 py-2 border-[0.5px] border-text-secondary text-text-primary rounded-md"
               />
               <div className="flex flex-row justify-center gap-2 my-3">
                 <button
-                  className="w-1/2 bg-bg-primary hover:bg-bg-tertiary text-txt-primary"
+                  className="w-1/2 bg-bg-primary hover:bg-bg-tertiary text-text-primary"
                   onClick={() => setCreatingNewSession(false)}>
                   Cancel
                 </button>
                 <button
-                  className="w-1/2 bg-bg-secondary hover:bg-bg-tertiary text-txt-primary"
+                  className="w-1/2 bg-bg-secondary hover:bg-bg-tertiary text-text-primary"
                   onClick={handleCreateSession}>
                   {newSessionLoading && "Creating..."}
                   {!newSessionLoading && "Create"}
@@ -127,7 +134,7 @@ export default function Chatbot() {
           )}
           {!creatingNewSession && (
             <button
-              className="w-3/4 bg-bg-secondary hover:bg-bg-primary text-txt-primary"
+              className="w-3/4 bg-bg-secondary hover:bg-bg-primary text-text-primary"
               onClick={() => setCreatingNewSession(true)}>
               New Session
             </button>
@@ -141,7 +148,7 @@ export default function Chatbot() {
                 <div
                   key={idx}
                   className={`
-                    w-full flex items-center justify-between hover:bg-bg-secondary  rounded-md shadow p-3
+                    w-full flex items-center justify-between hover:bg-bg-secondary p-3
                     ${
                       session.session_id === currentSessionId
                         ? "bg-bg-secondary"
@@ -150,7 +157,9 @@ export default function Chatbot() {
                     `}>
                   <div
                     className="cursor-pointer hover:font-semibold"
-                    onClick={() => setCurrentSessionId(session.session_id)}>
+                    onClick={() => {
+                      handleSwitchSession(session.session_id);
+                    }}>
                     {session.session_title}
                   </div>
                   <button
@@ -172,9 +181,24 @@ export default function Chatbot() {
         {sessionsList.length == 0 && (
           <div className="flex flex-10 justify-center items-center text-text-secondary">
             {!sessionsListLoading && <p>No Sessions Found</p>}
-            {sessionsListLoading && <LoadingSpinner />}
+            {sessionsListLoading && (
+              <div className="w-20 h-20">
+                <LoadingSpinner />
+              </div>
+            )}
           </div>
         )}
+
+        <div className="flex justify-center items-center mb-2">
+          <button
+            className="bg-bg-secondary hover:bg-bg-primary text-text-secondary"
+            onClick={() => {
+              setStsActive(!stsActive);
+              setCurrentSessionId("");
+            }}>
+            Live Chat
+          </button>
+        </div>
       </div>
 
       {/* current chat */}
@@ -183,6 +207,13 @@ export default function Chatbot() {
           <div className="flex w-2/3 justify-start items-center">
             <Chat session_id={currentSessionId} />
           </div>
+        </div>
+      )}
+
+      {/* live STS chat */}
+      {stsActive && currentSessionId == "" && (
+        <div className="flex flex-1 w-8/10 h-full p-10 items-start justify-center overflow-auto">
+          <SpeechToSpeech />
         </div>
       )}
     </div>

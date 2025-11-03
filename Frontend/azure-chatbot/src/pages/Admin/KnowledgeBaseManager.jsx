@@ -2,7 +2,7 @@ import React from "react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { useUser } from "../contexts/UserContext";
+import { useUser } from "../../contexts/UserContext";
 import "primeicons/primeicons.css";
 
 export default function KnowledgeBaseManager() {
@@ -10,12 +10,37 @@ export default function KnowledgeBaseManager() {
   const [indexList, setIndexList] = useState([]);
   const [newIndexName, setNewIndexName] = useState("");
   const [isCreatingNewIndex, setIsCreatingNewIndex] = useState(false);
+  const [currentIndexName, setCurrentIndexName] = useState("");
+
   const navigate = useNavigate();
 
+  useEffect(() => {
+    handleGetIndexList();
+    handleGetIndexName();
+  }, []);
+
+  /////////
+  // API Calls
+  /////////
+
+  const handleGetIndexName = async () => {
+    try {
+      const response = await axios.get(
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_get_index_name",
+        {
+          params: { user_id: user.id },
+        }
+      );
+      const index_name = response.data.index_name;
+      setCurrentIndexName(index_name);
+    } catch (error) {
+      console.error("Error fetching current index name:", error);
+    }
+  };
   const handleCreateIndex = async () => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_create_index",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_create_index",
         {
           user_id: user.id,
           index_name: newIndexName,
@@ -42,7 +67,7 @@ export default function KnowledgeBaseManager() {
   const handleGetIndexList = async () => {
     try {
       const response = await axios.get(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_list_indexes",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_list_indexes",
         {
           params: { user_id: user.id },
         }
@@ -58,7 +83,7 @@ export default function KnowledgeBaseManager() {
   const handleDeleteIndex = async (idx) => {
     try {
       const response = await axios.post(
-        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/http_ai_search_delete_index",
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_delete_index",
         {
           user_id: user.id,
           index_name: indexList[idx],
@@ -75,10 +100,6 @@ export default function KnowledgeBaseManager() {
     navigate("/admin/edit-docs", { state: { index_name: indexList[idx] } });
   };
 
-  useEffect(() => {
-    handleGetIndexList();
-  }, []);
-
   return (
     <div className="flex flex-1 flex-col p-4">
       <div>
@@ -89,11 +110,11 @@ export default function KnowledgeBaseManager() {
           <div
             key={idx}
             className="w-full flex items-center justify-between bg-bg-tertiary rounded-md shadow p-3">
-            <a
-              href="google.com"
-              className="text-left font-medium text-text-primary hover:font-bold cursor-pointer">
+            <p
+              className="text-left font-medium text-text-primary hover:font-bold cursor-pointer"
+              onClick={() => handleAddDocs(idx)}>
               {item}
-            </a>
+            </p>
 
             <div className="flex gap-2">
               <button
@@ -116,17 +137,18 @@ export default function KnowledgeBaseManager() {
               onClick={() => setIsCreatingNewIndex(true)}>
               Create Index
             </button>
-            <p className="text-red-500">
-              Note: The chatbot relies on index <i>rag-ict-coueiss-04</i>. I
-              will be removing the option to edit indexes but for now it is
-              useful for testing.
+
+            <p className="text-text-secondary text-center">
+              Search Index In Use: <b>{currentIndexName}</b>
+              <br />
+              To change it, you must modify the app's environment variables.
             </p>
           </div>
         )}
 
         {/* form for creating a new index */}
         {isCreatingNewIndex && (
-          <div className="flex flex-col gap-5 mt-5 p-5 items-center">
+          <div className="flex flex-col gap-5 mt-5 p-5 items-center text-text-primary">
             <input
               type="text"
               value={newIndexName}

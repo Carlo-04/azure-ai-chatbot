@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg-primary: #05061b;
-  --color-bg-secondary: #204c8e;
-  --color-bg-tertiary: #222840;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #dadada;
+  --color-bg-primary: #eeeeee;
+  --color-bg-secondary: #638cff;
+  --color-bg-tertiary: #d1d1d1;
+  --color-text-primary: #000000;
+  --color-text-secondary: #161616;
 
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -29,8 +29,10 @@ body {
 }
 
 h1 {
-  font-size: 3.2em;
+  font-size: 2em;
+  font-weight: bold;
   line-height: 1.1;
+  color: var(--color-text-secondary);
 }
 
 button {

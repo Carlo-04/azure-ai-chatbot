@@ -1,0 +1,4 @@
+.venv
+.env
+requirements_sts.txt
+SpeechToSpeechServer.py

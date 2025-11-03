@@ -219,8 +219,6 @@ __azurite_db*__.json
 .python_packages
 
 
-.funcignore
-
 #React files
 
 # Logs
@@ -247,3 +245,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+testing/

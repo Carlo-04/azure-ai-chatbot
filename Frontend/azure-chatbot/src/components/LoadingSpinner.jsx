@@ -5,11 +5,11 @@ export default function LoadingSpinner() {
     <div
       className="
 				flex 
-				h-15
-				w-15
+				h-full
+				w-full
 				items-center 
-				justify-start 
-				self-start 
+				justify-center
+				self-center
 				bg-transparent
 				rounded-full
 				px-3 py-2

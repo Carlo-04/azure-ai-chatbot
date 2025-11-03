@@ -6,6 +6,7 @@ azure-functions
 dotenv
 tiktoken
 openai
+bcrypt
 azure-cosmos
 azure-search-documents
 azure-core
@@ -13,4 +14,4 @@ azure-identity
 azure-ai-formrecognizer
 azure-cognitiveservices-speech
 azure-storage-blob
-bcrypt
+azure-communication-email
