@@ -10,8 +10,33 @@ export default function KnowledgeBaseManager() {
   const [indexList, setIndexList] = useState([]);
   const [newIndexName, setNewIndexName] = useState("");
   const [isCreatingNewIndex, setIsCreatingNewIndex] = useState(false);
+  const [currentIndexName, setCurrentIndexName] = useState("");
+
   const navigate = useNavigate();
 
+  useEffect(() => {
+    handleGetIndexList();
+    handleGetIndexName();
+  }, []);
+
+  /////////
+  // API Calls
+  /////////
+
+  const handleGetIndexName = async () => {
+    try {
+      const response = await axios.get(
+        "https://fa-ict-coueiss-sdc-01-d2g5h9gddrcucygu.swedencentral-01.azurewebsites.net/api/ai_search_get_index_name",
+        {
+          params: { user_id: user.id },
+        }
+      );
+      const index_name = response.data.index_name;
+      setCurrentIndexName(index_name);
+    } catch (error) {
+      console.error("Error fetching current index name:", error);
+    }
+  };
   const handleCreateIndex = async () => {
     try {
       const response = await axios.post(
@@ -75,10 +100,6 @@ export default function KnowledgeBaseManager() {
     navigate("/admin/edit-docs", { state: { index_name: indexList[idx] } });
   };
 
-  useEffect(() => {
-    handleGetIndexList();
-  }, []);
-
   return (
     <div className="flex flex-1 flex-col p-4">
       <div>
@@ -116,10 +137,11 @@ export default function KnowledgeBaseManager() {
               onClick={() => setIsCreatingNewIndex(true)}>
               Create Index
             </button>
-            <p className="text-red-500">
-              Note: The chatbot relies on index <i>rag-ict-coueiss-04</i>. I
-              will be removing the option to edit indexes but for now it is
-              useful for testing.
+
+            <p className="text-text-secondary text-center">
+              Search Index In Use: <b>{currentIndexName}</b>
+              <br />
+              To change it, you must modify the app's environment variables.
             </p>
           </div>
         )}

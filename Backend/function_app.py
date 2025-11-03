@@ -364,6 +364,47 @@ def chatbotTextToSpeech(req: func.HttpRequest) -> func.HttpResponse:
 ###############
 
 #
+#########   Get Search Index Name #################
+#
+@app.function_name(name="AISearchGetIndexName")
+@app.route(route="ai_search_get_index_name", methods=["GET"])
+def aiSearchGetIndexName(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+        # Parse request body
+        user_id = req.params.get("user_id")
+
+        if not user_id:
+            return func.HttpResponse(
+                json.dumps({"error": "user_id is required"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        if not isAdmin(user_id):
+            return func.HttpResponse(
+                json.dumps({"error": "This function can only be executed by an admin user"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        
+        index_name = AISearch.getSearchIndexName()
+        
+        return func.HttpResponse(
+            json.dumps({"index_name": index_name}),
+            status_code=200,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.exception("Error in GetIndexName HTTP trigger")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )
+    
+#
 #########   List Search Indexes #################
 #
 @app.function_name(name="AISearchListSearchIndexes")
